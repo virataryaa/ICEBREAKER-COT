@@ -574,7 +574,7 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         ]
     kpi_row(kpi_items, comm)
 
-    # ── Collapsible data tables (positions | weekly Δ) ────────────────────
+    # ── Collapsible merged table: Positions | Weekly Δ ────────────────────
     with st.expander(f"{comm} — Weekly Data  (k lots)", expanded=False):
         if is_cit:
             tbl_cols   = ["Date", sc, "Spec Long", "Spec Short",
@@ -602,48 +602,54 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
 
         num_cols = [c for c in base.columns if c not in ("Date", "Rollex %Δ")]
 
-        # Build delta table (week-over-week diff of position cols)
         chg = base.copy()
         for nc in num_cols:
             chg[nc] = chg[nc].diff()
 
-        # Sort both newest-first for display
         base = base.sort_values("Date", ascending=False).reset_index(drop=True)
         chg  = chg.sort_values("Date",  ascending=False).reset_index(drop=True)
+        date_str = pd.to_datetime(base["Date"]).dt.strftime("%d %b '%y")
 
-        date_str     = pd.to_datetime(base["Date"]).dt.strftime("%d %b '%y")
-        base["Date"] = date_str
-        chg["Date"]  = date_str
+        val_cols = [c for c in base.columns if c != "Date"]
 
-        pos_fmt = {c: "{:.1f}" for c in num_cols}
-        chg_fmt = {c: "{:+.1f}" for c in num_cols}
-        for fmt in (pos_fmt, chg_fmt):
-            if "Rollex %Δ" in base.columns:
-                fmt["Rollex %Δ"] = "{:+.2f}%"
+        # Single MultiIndex DataFrame: Date | Positions … | Weekly Δ …
+        date_df = pd.DataFrame({("", "Date"): date_str.values})
+        pos_df  = base[val_cols].copy()
+        chg_df  = chg[val_cols].copy()
+        pos_df.columns = pd.MultiIndex.from_tuples([("Positions", c) for c in val_cols])
+        chg_df.columns = pd.MultiIndex.from_tuples([("Weekly Δ",  c) for c in val_cols])
+        combined = pd.concat([date_df, pos_df, chg_df], axis=1)
 
-        def _hl(val):
-            if isinstance(val, str) or pd.isna(val):
-                return ""
-            return f"color:{'#16a34a' if val > 0 else '#dc2626' if val < 0 else '#888'}"
+        fmt = {}
+        for c in val_cols:
+            fmt[("Positions", c)] = "{:+.2f}%" if c == "Rollex %Δ" else "{:.1f}"
+            fmt[("Weekly Δ",  c)] = "{:+.2f}%" if c == "Rollex %Δ" else "{:+.1f}"
 
-        net_cols = [c for c in base.columns if "Net" in c or c == "Rollex %Δ"]
-        all_num  = [c for c in chg.columns  if c != "Date"]
+        def _style_tbl(df):
+            out = pd.DataFrame("", index=df.index, columns=df.columns)
+            for col in df.columns:
+                if not isinstance(col, tuple) or col[0] == "":
+                    continue
+                group, sub = col
+                for i in df.index:
+                    raw = df.at[i, col]
+                    if isinstance(raw, str):
+                        continue
+                    try:
+                        v = float(raw)
+                        if np.isnan(v):
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+                    clr = "#16a34a" if v > 0 else "#dc2626" if v < 0 else "#888"
+                    if group == "Weekly Δ" or "Net" in sub or sub == "Rollex %Δ":
+                        out.at[i, col] = f"color:{clr}"
+            return out
 
-        styled_base = base.style.format(pos_fmt, na_rep="—")
-        for nc in net_cols:
-            styled_base = styled_base.map(_hl, subset=[nc])
-
-        styled_chg = chg.style.format(chg_fmt, na_rep="—")
-        for nc in all_num:
-            styled_chg = styled_chg.map(_hl, subset=[nc])
-
-        c_left, c_right = st.columns(2)
-        with c_left:
-            st.caption("Positions")
-            st.dataframe(styled_base, use_container_width=True, height=400)
-        with c_right:
-            st.caption("Weekly Change Δ")
-            st.dataframe(styled_chg, use_container_width=True, height=400)
+        styled = (combined.style
+                          .format(fmt, na_rep="—")
+                          .apply(_style_tbl, axis=None))
+        st.dataframe(styled, use_container_width=True, height=420)
 
     c1, c2 = st.columns(2)
     with c1:
