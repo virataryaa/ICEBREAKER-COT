@@ -197,9 +197,17 @@ def build_zscore_matrix(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.Dat
             continue
         sc  = spec_col(is_cit)
         row = {"Commodity": comm}
-        for col_name, col in [("Spec Δ", sc), ("Comm Δ" if is_cit else "Swap Δ",
-                                               "Comm Net" if is_cit else "Swap Net"),
-                               ("Px Δ", "Px")]:
+        col_map = [
+            ("Spec Δ",       sc),
+            ("Spec Long Δ",  "Spec Long"  if is_cit else "MM Long"),
+            ("Spec Short Δ", "Spec Short" if is_cit else "MM Short"),
+            ("Comm Δ",       "Comm Net"   if is_cit else "Swap Net"),
+            ("Comm Long Δ",  "Comm Long"  if is_cit else "Swap Long"),
+            ("Comm Short Δ", "Comm Short" if is_cit else "Swap Short"),
+        ]
+        for col_name, col in col_map:
+            if col not in d.columns:
+                continue
             chg = d[col].diff()
             if chg.dropna().empty:
                 continue
