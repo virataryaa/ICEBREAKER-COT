@@ -529,11 +529,10 @@ def main():
         st.markdown("---")
 
         ALL_COMMS = CIT_COMMS + DISAGG_COMMS
-        comm_labels = {k: v for k, v in COMM_NAMES.items()}
         comm = st.selectbox(
             "Commodity",
             ALL_COMMS,
-            format_func=lambda c: comm_labels.get(c, c),
+            format_func=lambda c: COMM_NAMES.get(c, c),
         )
         is_cit = comm in CIT_COMMS
 
@@ -546,33 +545,15 @@ def main():
             format="MMM YYYY",
         )
 
-        st.markdown("---")
-
-        with st.expander("Z-Score Matrix", expanded=True):
-            d_start_z  = pd.Timestamp(date_range[0])
-            d_end_z    = pd.Timestamp(date_range[1])
-            cit_z      = df_cit[(df_cit["Date"] >= d_start_z) & (df_cit["Date"] <= d_end_z)]
-            disagg_z   = df_disagg[(df_disagg["Date"] >= d_start_z) & (df_disagg["Date"] <= d_end_z)]
-            zdf = build_zscore_matrix(cit_z, disagg_z)
-            if not zdf.empty:
-                z_cols = list(zdf.columns)
-                styled = (
-                    zdf.style
-                       .map(_color_z, subset=z_cols)
-                       .format("{:.2f}", na_rep="—", subset=z_cols)
-                )
-                st.dataframe(styled, use_container_width=True)
-            else:
-                st.info("Not enough data.")
-
     # ── Main area ─────────────────────────────────────────────────────────────
     d_start = pd.Timestamp(date_range[0])
     d_end   = pd.Timestamp(date_range[1])
 
-    df      = df_cit    if is_cit else df_disagg
-    df_f    = df[(df["Date"] >= d_start) & (df["Date"] <= d_end)]
+    cit_f    = df_cit[(df_cit["Date"]       >= d_start) & (df_cit["Date"]       <= d_end)]
+    disagg_f = df_disagg[(df_disagg["Date"] >= d_start) & (df_disagg["Date"]    <= d_end)]
+    df_f     = cit_f if is_cit else disagg_f
 
-    report  = "CIT" if is_cit else "Disaggregated"
+    report = "CIT" if is_cit else "Disaggregated"
     st.markdown(
         f"<h2 style='font-size:1.4rem;font-weight:700;color:{NAVY};margin-bottom:0'>"
         f"COT Dashboard</h2>"
@@ -582,7 +563,28 @@ def main():
     )
     st.markdown("---")
 
-    render_commodity(df_f, comm, is_cit=is_cit)
+    tab_comm, tab_cross = st.tabs([COMM_NAMES.get(comm, comm), "Cross Commodity Analysis"])
+
+    with tab_comm:
+        render_commodity(df_f, comm, is_cit=is_cit)
+
+    with tab_cross:
+        st.markdown(
+            f"<p style='font-size:.8rem;color:{GRAY};margin-bottom:12px'>"
+            f"Weekly Δ z-scores across all commodities · same date range</p>",
+            unsafe_allow_html=True,
+        )
+        zdf = build_zscore_matrix(cit_f, disagg_f)
+        if not zdf.empty:
+            z_cols = list(zdf.columns)
+            styled = (
+                zdf.style
+                   .map(_color_z, subset=z_cols)
+                   .format("{:.2f}", na_rep="—", subset=z_cols)
+            )
+            st.dataframe(styled, use_container_width=True, height=280)
+        else:
+            st.info("Not enough data in selected range.")
 
 
 if __name__ == "__main__":
