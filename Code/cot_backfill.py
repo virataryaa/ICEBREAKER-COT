@@ -48,8 +48,6 @@ CIT_FIELDS = [
     'Ncomm Positions Spread All Nocit Close',
     'Cit Positions Long All Close',
     'Cit Positions Short All Close',
-    'Noncomm Positions Long All Close',
-    'Noncomm Positions Short All Close',
 ]
 
 CIT_COL_MAP = {
@@ -202,10 +200,9 @@ def build_cit(comm, cfg, start, end):
     print(f"{len(df)} rows")
 
     df = df.rename(columns=CIT_COL_MAP)
-    df['Non Rep Long']  = df['Noncomm Positions Long All Close']  - df['Spec Long']
-    df['Non Rep Short'] = df['Noncomm Positions Short All Close'] - df['Spec Short']
-    df = df.drop(columns=['Noncomm Positions Long All Close',
-                           'Noncomm Positions Short All Close'], errors='ignore')
+    # Non-reportable = residual after accounting for all reportable groups
+    df['Non Rep Long']  = df['Total OI'] - df['Comm Long']  - df['Spec Long']  - df['Spec Spread'] - df['Index Long']
+    df['Non Rep Short'] = df['Total OI'] - df['Comm Short'] - df['Spec Short'] - df['Spec Spread'] - df['Index Short']
 
     df = attach_px(df, cfg['px_sym'], start, end)
     df['Commodity'] = comm
