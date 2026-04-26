@@ -23,7 +23,7 @@ DISAGG_FILE = DB_DIR / "cot_disagg.parquet"
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="COT Dashboard", layout="wide",
-                   initial_sidebar_state="collapsed")
+                   initial_sidebar_state="expanded")
 st.markdown("""<style>
   [data-testid="stAppViewContainer"],[data-testid="stMain"],.main{background:#fafafa!important}
   [data-testid="stHeader"]{background:transparent!important}
@@ -510,14 +510,6 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool):
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 def main():
-    st.markdown(
-        f"<h2 style='font-size:1.4rem;font-weight:700;color:{NAVY};margin-bottom:2px'>"
-        f"COT Dashboard</h2>"
-        f"<p style='font-size:.76rem;color:{GRAY};margin-top:0'>"
-        f"CIT: KC / CC / SB / CT  ·  Disaggregated: RC / LCC  ·  Positions in k lots</p>",
-        unsafe_allow_html=True,
-    )
-
     df_cit    = load_cit()
     df_disagg = load_disagg()
 
@@ -526,64 +518,71 @@ def main():
     max_d     = all_dates.max().date()
     def_start = datetime.date(max(min_d.year, max_d.year - 5), 1, 1)
 
-    c_sl, c_lbl = st.columns([5, 1])
-    with c_sl:
-        date_range = st.slider(
-            "Date range", min_value=min_d, max_value=max_d,
-            value=(def_start, max_d), format="MMM YYYY",
-            label_visibility="collapsed",
-        )
-    with c_lbl:
+    # ── Sidebar ───────────────────────────────────────────────────────────────
+    with st.sidebar:
         st.markdown(
-            f"<div style='padding-top:1.6rem;font-size:.78rem;color:{GRAY}'>"
-            f"{date_range[0]:%d %b %Y} → {date_range[1]:%d %b %Y}</div>",
+            f"<p style='font-size:.7rem;font-weight:700;color:{GRAY};"
+            f"text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px'>"
+            f"ICEBREAKER · COT</p>",
             unsafe_allow_html=True,
         )
+        st.markdown("---")
 
-    d_start  = pd.Timestamp(date_range[0])
-    d_end    = pd.Timestamp(date_range[1])
-    cit_f    = df_cit[(df_cit["Date"]       >= d_start) & (df_cit["Date"]       <= d_end)]
-    disagg_f = df_disagg[(df_disagg["Date"] >= d_start) & (df_disagg["Date"]    <= d_end)]
+        ALL_COMMS = CIT_COMMS + DISAGG_COMMS
+        comm_labels = {k: v for k, v in COMM_NAMES.items()}
+        comm = st.selectbox(
+            "Commodity",
+            ALL_COMMS,
+            format_func=lambda c: comm_labels.get(c, c),
+        )
+        is_cit = comm in CIT_COMMS
 
+        st.markdown("---")
+
+        date_range = st.slider(
+            "Date range",
+            min_value=min_d, max_value=max_d,
+            value=(def_start, max_d),
+            format="MMM YYYY",
+        )
+
+        st.markdown("---")
+
+        with st.expander("Z-Score Matrix", expanded=True):
+            d_start_z  = pd.Timestamp(date_range[0])
+            d_end_z    = pd.Timestamp(date_range[1])
+            cit_z      = df_cit[(df_cit["Date"] >= d_start_z) & (df_cit["Date"] <= d_end_z)]
+            disagg_z   = df_disagg[(df_disagg["Date"] >= d_start_z) & (df_disagg["Date"] <= d_end_z)]
+            zdf = build_zscore_matrix(cit_z, disagg_z)
+            if not zdf.empty:
+                z_cols = list(zdf.columns)
+                styled = (
+                    zdf.style
+                       .map(_color_z, subset=z_cols)
+                       .format("{:.2f}", na_rep="—", subset=z_cols)
+                )
+                st.dataframe(styled, use_container_width=True)
+            else:
+                st.info("Not enough data.")
+
+    # ── Main area ─────────────────────────────────────────────────────────────
+    d_start = pd.Timestamp(date_range[0])
+    d_end   = pd.Timestamp(date_range[1])
+
+    df      = df_cit    if is_cit else df_disagg
+    df_f    = df[(df["Date"] >= d_start) & (df["Date"] <= d_end)]
+
+    report  = "CIT" if is_cit else "Disaggregated"
+    st.markdown(
+        f"<h2 style='font-size:1.4rem;font-weight:700;color:{NAVY};margin-bottom:0'>"
+        f"COT Dashboard</h2>"
+        f"<p style='font-size:.76rem;color:{GRAY};margin-top:2px'>"
+        f"{report} · {date_range[0]:%d %b %Y} – {date_range[1]:%d %b %Y} · Positions in k lots</p>",
+        unsafe_allow_html=True,
+    )
     st.markdown("---")
 
-    with st.expander("Z-Score Matrix — weekly Δ z-scores, all commodities", expanded=True):
-        zdf = build_zscore_matrix(cit_f, disagg_f)
-        if not zdf.empty:
-            z_cols = list(zdf.columns)
-            styled = (
-                zdf.style
-                   .map(_color_z, subset=z_cols)
-                   .format("{:.2f}", na_rep="—", subset=z_cols)
-            )
-            st.dataframe(styled, use_container_width=True, height=250)
-        else:
-            st.info("Not enough data in selected range.")
-
-    st.markdown("---")
-
-    tab_cit, tab_dis = st.tabs([
-        "CIT  (KC / CC / SB / CT)",
-        "Disaggregated  (RC / LCC)",
-    ])
-
-    with tab_cit:
-        with st.expander("Commodity filter", expanded=False):
-            sel_cit = st.multiselect("", CIT_COMMS, default=CIT_COMMS, key="sel_cit")
-        if not sel_cit:
-            st.warning("Select at least one commodity.")
-        else:
-            for comm in sel_cit:
-                render_commodity(cit_f, comm, is_cit=True)
-
-    with tab_dis:
-        with st.expander("Commodity filter", expanded=False):
-            sel_dis = st.multiselect("", DISAGG_COMMS, default=DISAGG_COMMS, key="sel_dis")
-        if not sel_dis:
-            st.warning("Select at least one commodity.")
-        else:
-            for comm in sel_dis:
-                render_commodity(disagg_f, comm, is_cit=False)
+    render_commodity(df_f, comm, is_cit=is_cit)
 
 
 if __name__ == "__main__":
