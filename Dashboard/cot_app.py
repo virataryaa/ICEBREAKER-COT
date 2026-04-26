@@ -94,6 +94,7 @@ CIT_POS_COLS = [
     "Total OI",
 ]
 DISAGG_POS_COLS = [
+    "Comm Long", "Comm Short",
     "Swap Long", "Swap Short", "Swap Spread",
     "MM Long", "MM Short", "MM Spread",
     "Other Long", "Other Short",
