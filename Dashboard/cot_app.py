@@ -382,8 +382,9 @@ def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) -> go
         xaxis=dict(**_ax(x=True), tickformat="%b '%y"),
         yaxis=dict(**_ax()),
     )
-    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
-    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
+    rl_label = "Rollex" if (load_rollex(comm) is not None) else "Price"
+    fig.update_yaxes(title_text="k lots",   title_font_size=10, secondary_y=False, **_ax())
+    fig.update_yaxes(title_text=rl_label,   title_font_size=10, secondary_y=True,
                      showgrid=False, tickfont=dict(size=10, color="#888"))
     return fig
 
@@ -424,7 +425,7 @@ def _scatter_base(x, y, dates, color, title, xlabel, ylabel, height=380) -> go.F
         showlegend=False,
     ))
     fig.add_trace(go.Scatter(
-        x=[x[-1]], y=[y[-1]], mode="markers", name="Latest",
+        x=[x[-1]], y=[y[-1]], mode="markers", showlegend=False,
         marker=dict(symbol="star", size=14, color=DRED, line=dict(width=1.2, color="white")),
         hovertemplate=f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>X: {x[-1]:.2f}<br>Y: {y[-1]:.2f}<extra></extra>",
     ))
