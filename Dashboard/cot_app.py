@@ -357,11 +357,20 @@ def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) -> go
         hovertemplate="<b>%{x|%b %Y}</b><br>Short: %{y:.1f}k<extra></extra>",
     ), secondary_y=False)
 
+    rl = load_rollex(comm)
+    if rl is not None:
+        rl_reset = rl[["rollex_px"]].reset_index()
+        rl_reset.columns = ["Date", "Rollex"]
+        rollex_vals = _align_to_cot(d["Date"], rl_reset, "Date", "Rollex")
+        px_y, px_label = rollex_vals, "Rollex"
+    else:
+        px_y, px_label = d["Px"].values, "Price"
+
     fig.add_trace(go.Scatter(
-        x=d["Date"], y=d["Px"], name="Price",
+        x=d["Date"], y=px_y, name=px_label,
         line=dict(color=C_PRICE, width=1.4, dash="dot"),
         opacity=0.7,
-        hovertemplate="<b>%{x|%b %Y}</b><br>Px: %{y:.2f}<extra></extra>",
+        hovertemplate="<b>%{x|%b %Y}</b><br>" + px_label + ": %{y:.2f}<extra></extra>",
     ), secondary_y=True)
 
     fig.update_layout(
