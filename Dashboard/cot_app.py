@@ -34,19 +34,24 @@ st.markdown("""<style>
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 NAVY  = "#0a2463"
-RED   = "#8b1a00"
-GREEN = "#1a7a1a"
-DRED  = "#c0392b"
-AMBER = "#e8a020"
+RED   = "#c0392b"
+GREEN = "#27ae60"
+DRED  = "#e74c3c"
+AMBER = "#f39c12"
 GRAY  = "#6e6e73"
 
+# Chart-specific colours (softer, modern)
+C_LONG  = "#27ae60"
+C_SHORT = "#e74c3c"
+C_PRICE = "#f39c12"
+
 COMM_COLORS = {
-    "KC":  "#0a2463",
-    "CC":  "#e8a020",
-    "SB":  "#1a7a1a",
-    "CT":  "#7b2d8b",
-    "RC":  "#8b1a00",
-    "LCC": "#4a7fb5",
+    "KC":  "#1a56db",
+    "CC":  "#d97706",
+    "SB":  "#059669",
+    "CT":  "#7c3aed",
+    "RC":  "#dc2626",
+    "LCC": "#0891b2",
 }
 COMM_NAMES = {
     "KC":  "KC — Arabica",
@@ -61,8 +66,21 @@ _BASE = dict(
     template="plotly_white",
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="-apple-system,Helvetica Neue,sans-serif", color="#1d1d1f", size=11),
+    font=dict(family="-apple-system,BlinkMacSystemFont,Helvetica Neue,sans-serif",
+              color="#2d2d2d", size=11),
 )
+
+def _ax(x=False):
+    base = dict(
+        showgrid=True, gridcolor="rgba(0,0,0,0.05)", gridwidth=1,
+        zeroline=True, zerolinecolor="rgba(0,0,0,0.14)", zerolinewidth=1,
+        showline=True, linecolor="rgba(0,0,0,0.10)", linewidth=1,
+        tickfont=dict(size=10, color="#888"),
+        tickcolor="rgba(0,0,0,0)",
+    )
+    if x:
+        base.update(showgrid=False, tickangle=-25)
+    return base
 
 CIT_COMMS    = ["KC", "CC", "SB", "CT"]
 DISAGG_COMMS = ["RC", "LCC"]
@@ -232,17 +250,18 @@ def comm_header(comm: str):
 
 def kpi_row(items: list, comm: str):
     color = COMM_COLORS.get(comm, NAVY)
-    html = "<div style='display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px'>"
+    r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    html = "<div style='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px'>"
     for lbl, val, sub in items:
-        sub_color = GREEN if sub and sub.startswith("▲") else DRED if sub and sub.startswith("▼") else "#888"
-        sub_h = (f"<span style='font-size:.65rem;color:{sub_color};margin-left:5px'>{sub}</span>"
+        sub_color = "#16a34a" if sub and sub.startswith("▲") else "#dc2626" if sub and sub.startswith("▼") else "#888"
+        sub_h = (f"<span style='font-size:.65rem;color:{sub_color};margin-left:4px'>{sub}</span>"
                  if sub else "")
         html += (
-            f"<div style='background:#f0f2f8;border-radius:8px;padding:6px 13px;"
-            f"min-width:100px;display:flex;flex-direction:column'>"
-            f"<span style='font-size:.57rem;color:{GRAY};text-transform:uppercase;"
-            f"letter-spacing:.09em'>{lbl}</span>"
-            f"<span style='font-size:.9rem;font-weight:700;color:{color}'>{val}{sub_h}</span>"
+            f"<div style='background:rgba({r},{g},{b},0.06);border:1px solid rgba({r},{g},{b},0.15);"
+            f"border-radius:10px;padding:7px 15px;min-width:105px;display:flex;flex-direction:column'>"
+            f"<span style='font-size:.56rem;color:#999;text-transform:uppercase;"
+            f"letter-spacing:.1em;margin-bottom:2px'>{lbl}</span>"
+            f"<span style='font-size:.92rem;font-weight:700;color:{color}'>{val}{sub_h}</span>"
             f"</div>"
         )
     html += "</div>"
@@ -254,164 +273,221 @@ def kpi_row(items: list, comm: str):
 # ══════════════════════════════════════════════════════════════════════════════
 def weekly_change_bars(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) -> go.Figure:
     sc = spec_col(is_cit)
-    d  = df[df["Commodity"] == comm].sort_values("Date").tail(9)
+    d  = df[df["Commodity"] == comm].sort_values("Date").tail(13)
     if len(d) < 2:
         return go.Figure().update_layout(**_BASE, height=340)
 
+    color = COMM_COLORS.get(comm, NAVY)
     if spec:
-        lc   = "Spec Long"  if is_cit else "MM Long"
-        shc  = "Spec Short" if is_cit else "MM Short"
-        nc   = sc
-        title = f"{comm} — {'Spec' if is_cit else 'MM'} Weekly Δ (k lots)"
+        lc, shc, nc = (("Spec Long", "Spec Short", sc) if is_cit
+                       else ("MM Long", "MM Short", sc))
+        label = "Spec" if is_cit else "MM"
     else:
-        lc   = "Comm Long"  if is_cit else "Swap Long"
-        shc  = "Comm Short" if is_cit else "Swap Short"
-        nc   = "Comm Net"   if is_cit else "Swap Net"
-        title = f"{comm} — {'Comm' if is_cit else 'Swap'} Weekly Δ (k lots)"
+        lc, shc, nc = (("Comm Long", "Comm Short", "Comm Net") if is_cit
+                       else ("Swap Long", "Swap Short", "Swap Net"))
+        label = "Comm" if is_cit else "Swap"
 
-    dates = d["Date"].iloc[1:]
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=dates, y=d[lc].diff().iloc[1:].values,  name="Long Δ",  marker_color="#2ecc71"))
-    fig.add_trace(go.Bar(x=dates, y=d[shc].diff().iloc[1:].values, name="Short Δ", marker_color=DRED))
-    fig.add_trace(go.Bar(x=dates, y=d[nc].diff().iloc[1:].values,  name="Net Δ",   marker_color=NAVY))
-    fig.add_hline(y=0, line_width=0.8, line_color="#aaa")
+    title  = f"{label} Weekly Change  ·  k lots"
+    dates  = d["Date"].iloc[1:]
+    ld, sd, nd = d[lc].diff().iloc[1:].values, d[shc].diff().iloc[1:].values, d[nc].diff().iloc[1:].values
+
+    def _bar(y, name, clr, opacity=0.82):
+        return go.Bar(
+            x=dates, y=y, name=name,
+            marker=dict(color=clr, opacity=opacity, line=dict(width=0)),
+            hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>{name}: %{{y:+.1f}}k<extra></extra>",
+        )
+
+    fig = go.Figure([
+        _bar(ld, "Long Δ",  C_LONG),
+        _bar(sd, "Short Δ", C_SHORT),
+        _bar(nd, "Net Δ",   color, opacity=0.95),
+    ])
+    fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.18)")
     fig.update_layout(
         **_BASE, barmode="group", height=340,
-        title=dict(text=title, font_size=12, x=0),
-        margin=dict(l=50, r=20, t=45, b=90),
-        legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font_size=10),
-        xaxis=dict(tickformat="%d %b '%y", tickangle=-30),
+        title=dict(text=title, font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=16, t=40, b=80),
+        legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+        yaxis=dict(**_ax(), title_text="k lots", title_font_size=10),
+        bargap=0.18, bargroupgap=0.06,
     )
     return fig
 
 
 def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) -> go.Figure:
-    sc = spec_col(is_cit)
-    d  = df[df["Commodity"] == comm].sort_values("Date")
+    sc    = spec_col(is_cit)
+    d     = df[df["Commodity"] == comm].sort_values("Date")
+    color = COMM_COLORS.get(comm, NAVY)
     if d.empty:
-        return go.Figure().update_layout(**_BASE, height=340)
+        return go.Figure().update_layout(**_BASE, height=360)
 
     if spec:
-        lc   = "Spec Long"  if is_cit else "MM Long"
-        shc  = "Spec Short" if is_cit else "MM Short"
-        nc   = sc
-        title = f"{comm} — {'Spec' if is_cit else 'MM'} Gross & Net (k lots)"
+        lc, shc, nc = (("Spec Long", "Spec Short", sc) if is_cit
+                       else ("MM Long", "MM Short", sc))
+        label = "Spec" if is_cit else "MM"
     else:
-        lc   = "Comm Long"  if is_cit else "Swap Long"
-        shc  = "Comm Short" if is_cit else "Swap Short"
-        nc   = "Comm Net"   if is_cit else "Swap Net"
-        title = f"{comm} — {'Comm' if is_cit else 'Swap'} Gross & Net (k lots)"
+        lc, shc, nc = (("Comm Long", "Comm Short", "Comm Net") if is_cit
+                       else ("Swap Long", "Swap Short", "Swap Net"))
+        label = "Comm" if is_cit else "Swap"
 
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(go.Scatter(x=d["Date"], y=d[lc],  name="Long",
-                             line=dict(color=GREEN, width=1.6)), secondary_y=False)
-    fig.add_trace(go.Scatter(x=d["Date"], y=d[shc], name="Short",
-                             line=dict(color=DRED, width=1.6)), secondary_y=False)
-    fig.add_trace(go.Scatter(x=d["Date"], y=d[nc],  name="Net",
-                             line=dict(color=NAVY, width=2, dash="dash")), secondary_y=False)
-    fig.add_trace(go.Scatter(x=d["Date"], y=d["Px"], name="Px",
-                             line=dict(color=AMBER, width=1.2), opacity=0.65), secondary_y=True)
+    title = f"{label} Gross & Net  ·  k lots"
+    fig   = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # filled net area
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d[nc], name="Net",
+        fill="tozeroy",
+        fillcolor=f"rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.10)",
+        line=dict(color=color, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%b %Y}</b><br>Net: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d[lc], name="Long",
+        line=dict(color=C_LONG, width=1.6, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%b %Y}</b><br>Long: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d[shc], name="Short",
+        line=dict(color=C_SHORT, width=1.6, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%b %Y}</b><br>Short: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d["Px"], name="Price",
+        line=dict(color=C_PRICE, width=1.4, dash="dot"),
+        opacity=0.7,
+        hovertemplate="<b>%{x|%b %Y}</b><br>Px: %{y:.2f}<extra></extra>",
+    ), secondary_y=True)
+
     fig.update_layout(
-        **_BASE, title=dict(text=title, font_size=12, x=0), height=340,
-        margin=dict(l=50, r=50, t=45, b=90),
-        legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center", font_size=10),
-        xaxis=dict(tickformat="%b '%y"),
+        **_BASE, height=360,
+        title=dict(text=title, font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=55, t=40, b=80),
+        legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%b '%y"),
+        yaxis=dict(**_ax()),
     )
-    fig.update_yaxes(title_text="k lots", secondary_y=False, title_font_size=10)
-    fig.update_yaxes(title_text="Price",  secondary_y=True,  title_font_size=10, showgrid=False)
+    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
+    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
+                     showgrid=False, tickfont=dict(size=10, color="#888"))
     return fig
 
 
-def _scatter_base(x, y, dates, color, title, xlabel, ylabel, height=360) -> go.Figure:
+def _scatter_base(x, y, dates, color, title, xlabel, ylabel, height=380) -> go.Figure:
     x     = np.asarray(x, dtype=float)
     y     = np.asarray(y, dtype=float)
     dates = np.asarray(dates, dtype="datetime64[ns]")
     mask  = ~(np.isnan(x) | np.isnan(y))
     x, y, dates = x[mask], y[mask], dates[mask]
     if len(x) < 5:
-        return go.Figure().update_layout(**_BASE,
-               title=dict(text=title + "  [insufficient data]", font_size=12), height=height)
+        return go.Figure().update_layout(
+            **_BASE, title=dict(text=title + "  [insufficient data]", font_size=12), height=height)
 
-    r2 = float(np.corrcoef(x, y)[0, 1] ** 2)
-    sl, ic = np.polyfit(x, y, 1)
-    xl = np.linspace(x.min(), x.max(), 200)
-    recency = (dates - dates.min()).astype("timedelta64[D]").astype(float)
+    r2       = float(np.corrcoef(x, y)[0, 1] ** 2)
+    sl, ic   = np.polyfit(x, y, 1)
+    xl       = np.linspace(x.min(), x.max(), 200)
+    recency  = (dates - dates.min()).astype("timedelta64[D]").astype(float)
+    norm_rec = recency / recency.max() if recency.max() > 0 else recency
+
+    r, g, b  = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x, y=y, mode="markers",
-        marker=dict(color=recency, colorscale="Blues", size=6, opacity=0.75,
-                    colorbar=dict(title="Recent →", thickness=8, len=0.65,
-                                  tickvals=[], ticktext=[])),
+        marker=dict(
+            color=norm_rec, colorscale=[[0, "rgba(200,210,230,0.5)"],
+                                         [1, f"rgba({r},{g},{b},0.85)"]],
+            size=7, line=dict(width=0.5, color="white"),
+        ),
         text=pd.to_datetime(dates).strftime("%Y-%m-%d"),
-        hovertemplate="%{text}<br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>",
+        hovertemplate="<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>",
         showlegend=False,
     ))
-    fig.add_trace(go.Scatter(x=xl, y=sl * xl + ic, mode="lines",
-                             line=dict(color=color, width=1.8, dash="dash"), showlegend=False))
+    fig.add_trace(go.Scatter(
+        x=xl, y=sl * xl + ic, mode="lines",
+        line=dict(color=color, width=1.6, dash="dash"),
+        showlegend=False,
+    ))
     fig.add_trace(go.Scatter(
         x=[x[-1]], y=[y[-1]], mode="markers", name="Latest",
-        marker=dict(symbol="star", size=15, color=DRED, line=dict(width=1, color="white")),
-        hovertemplate=f"{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}<br>X: {x[-1]:.2f}<br>Y: {y[-1]:.2f}<extra></extra>",
+        marker=dict(symbol="star", size=14, color=DRED, line=dict(width=1.2, color="white")),
+        hovertemplate=f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>X: {x[-1]:.2f}<br>Y: {y[-1]:.2f}<extra></extra>",
     ))
     fig.update_layout(
         **_BASE,
-        title=dict(text=f"{title}   R²={r2:.2f}", font_size=12, x=0),
+        title=dict(text=f"{title}   <span style='font-size:11px;color:#888'>R²={r2:.2f}</span>",
+                   font=dict(size=12, color="#444"), x=0),
         height=height,
-        margin=dict(l=55, r=20, t=50, b=50),
-        xaxis_title=xlabel,
-        yaxis_title=ylabel,
-        legend=dict(font_size=9, x=0.01, y=0.99),
+        margin=dict(l=55, r=20, t=48, b=48),
+        xaxis=dict(**_ax(x=True), title_text=xlabel, title_font_size=10),
+        yaxis=dict(**_ax(), title_text=ylabel, title_font_size=10),
+        legend=dict(font_size=9, x=0.01, y=0.99, bgcolor="rgba(0,0,0,0)"),
     )
     return fig
 
 
 def px_chg_vs_cot_scatter(df: pd.DataFrame, comm: str, x_col: str) -> go.Figure:
     d = df[df["Commodity"] == comm].sort_values("Date")
-    px_chg_pct = d["Px"].pct_change() * 100
-    cot_chg    = d[x_col].diff()
-    color      = COMM_COLORS.get(comm, NAVY)
     return _scatter_base(
-        x=px_chg_pct.values, y=cot_chg.values, dates=d["Date"].values, color=color,
-        title=f"{comm} — {x_col} Δ vs Px Chg %",
-        xlabel="Px weekly chg %", ylabel=f"{x_col} weekly Δ (k lots)",
+        x=d["Px"].pct_change().values * 100,
+        y=d[x_col].diff().values,
+        dates=d["Date"].values,
+        color=COMM_COLORS.get(comm, NAVY),
+        title=f"{x_col} Δ vs Price Chg %",
+        xlabel="Price weekly chg %", ylabel=f"{x_col} Δ (k lots)",
     )
 
 
 def position_vs_price_scatter(df: pd.DataFrame, comm: str, y_col: str) -> go.Figure:
     d = df[df["Commodity"] == comm].sort_values("Date").dropna(subset=[y_col, "Px"])
-    color = COMM_COLORS.get(comm, NAVY)
     return _scatter_base(
-        x=d["Px"].values, y=d[y_col].values, dates=d["Date"].values, color=color,
-        title=f"{comm} — {y_col} vs Price",
+        x=d["Px"].values, y=d[y_col].values, dates=d["Date"].values,
+        color=COMM_COLORS.get(comm, NAVY),
+        title=f"{y_col} vs Price",
         xlabel="Price", ylabel=f"{y_col} (k lots)",
     )
 
 
 def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool) -> go.Figure:
-    sc  = spec_col(is_cit)
-    d   = df[df["Commodity"] == comm].sort_values("Date")
+    sc          = spec_col(is_cit)
+    d           = df[df["Commodity"] == comm].sort_values("Date")
     primary_net = "Comm Net" if is_cit else "Swap Net"
-    fig = make_subplots(rows=1, cols=3,
-                        subplot_titles=[f"{sc} Δ", f"{primary_net} Δ", "Px Δ"],
-                        horizontal_spacing=0.07)
-    for i, (col, color) in enumerate([(sc, GREEN), (primary_net, RED), ("Px", AMBER)], 1):
+    color       = COMM_COLORS.get(comm, NAVY)
+    specs_list  = [(sc, color), (primary_net, "#64748b"), ("Px", C_PRICE)]
+    labels      = [f"{sc} Δ", f"{primary_net} Δ", "Px Δ"]
+
+    fig = make_subplots(rows=1, cols=3, subplot_titles=labels, horizontal_spacing=0.08)
+    for i, (col, clr) in enumerate(specs_list, 1):
         if col not in d.columns:
             continue
         chg = d[col].diff().dropna()
         if chg.empty:
             continue
         lv = float(chg.iloc[-1])
-        fig.add_trace(go.Histogram(x=chg, nbinsx=28, marker_color=color,
-                                   opacity=0.75, showlegend=False), row=1, col=i)
-        fig.add_vline(x=lv, line_dash="dash", line_color=DRED,
+        r, g, b = int(clr[1:3], 16), int(clr[3:5], 16), int(clr[5:7], 16)
+        fig.add_trace(go.Histogram(
+            x=chg, nbinsx=30, showlegend=False,
+            marker=dict(color=f"rgba({r},{g},{b},0.72)",
+                        line=dict(color="white", width=0.6)),
+        ), row=1, col=i)
+        fig.add_vline(x=lv, line_dash="dash", line_color=DRED, line_width=1.6,
                       annotation_text=f" {lv:+.1f}", annotation_font_size=9,
-                      row=1, col=i)
+                      annotation_font_color=DRED, row=1, col=i)
+
     fig.update_layout(
         **_BASE,
-        title=dict(text=f"{comm} — Weekly Change Distributions", font_size=12, x=0),
-        height=300, margin=dict(l=40, r=20, t=50, b=40), showlegend=False,
+        title=dict(text="Weekly Change Distributions", font=dict(size=12, color="#444"), x=0),
+        height=300, margin=dict(l=40, r=20, t=48, b=36), showlegend=False,
     )
+    for i in range(1, 4):
+        fig.update_xaxes(**_ax(x=True), row=1, col=i)
+        fig.update_yaxes(**_ax(), row=1, col=i)
     return fig
 
 
