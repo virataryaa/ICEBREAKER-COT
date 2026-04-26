@@ -574,6 +574,50 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         ]
     kpi_row(kpi_items, comm)
 
+    # ── Collapsible data table ─────────────────────────────────────────────
+    with st.expander(f"{comm} — Weekly Data Table  (k lots)", expanded=False):
+        if is_cit:
+            tbl_cols   = ["Date", sc, "Spec Long", "Spec Short",
+                          "Comm Net", "Comm Long", "Comm Short", "Index Net"]
+            rename_map = {sc: "Spec Net"}
+        else:
+            tbl_cols   = ["Date", "Spec Net", "MM Long", "MM Short",
+                          "Comm Net", "Comm Long", "Comm Short"]
+            rename_map = {"MM Long": "Spec Long", "MM Short": "Spec Short"}
+
+        tbl = d[[c for c in tbl_cols if c in d.columns]].copy()
+
+        rl = load_rollex(comm)
+        if rl is not None:
+            rl_reset          = rl[["rollex_px"]].reset_index()
+            rl_reset.columns  = ["Date", "Rollex"]
+            rv                = _align_to_cot(d["Date"], rl_reset, "Date", "Rollex")
+            tbl["Rollex"]     = rv
+            tbl["Rollex %Δ"]  = (pd.Series(rv).pct_change() * 100).values
+            tbl               = tbl.drop(columns=["Rollex"])
+
+        tbl = (tbl.rename(columns=rename_map)
+                  .sort_values("Date", ascending=False)
+                  .reset_index(drop=True))
+        tbl["Date"] = pd.to_datetime(tbl["Date"]).dt.strftime("%d %b %Y")
+
+        num_cols = [c for c in tbl.columns if c not in ("Date", "Rollex %Δ")]
+        fmt      = {c: "{:.1f}" for c in num_cols}
+        if "Rollex %Δ" in tbl.columns:
+            fmt["Rollex %Δ"] = "{:+.2f}%"
+
+        def _hl_net(val):
+            if isinstance(val, str) or pd.isna(val):
+                return ""
+            return f"color:{'#16a34a' if val > 0 else '#dc2626' if val < 0 else '#888'}"
+
+        net_cols = [c for c in tbl.columns if "Net" in c or c == "Rollex %Δ"]
+        styled = tbl.style.format(fmt, na_rep="—")
+        for nc in net_cols:
+            styled = styled.map(_hl_net, subset=[nc])
+
+        st.dataframe(styled, use_container_width=True, height=420)
+
     c1, c2 = st.columns(2)
     with c1:
         st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
