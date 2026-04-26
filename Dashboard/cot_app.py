@@ -648,7 +648,15 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
 
         styled = (combined.style
                           .format(fmt, na_rep="—")
-                          .apply(_style_tbl, axis=None))
+                          .apply(_style_tbl, axis=None)
+                          .hide(axis="index")
+                          .set_table_styles([
+                              {"selector": "thead tr:first-child th",
+                               "props": [("text-align", "center"),
+                                         ("font-weight", "600"),
+                                         ("font-size", "0.78rem"),
+                                         ("color", "#444")]},
+                          ]))
         st.dataframe(styled, use_container_width=True, height=420)
 
     c1, c2 = st.columns(2)
