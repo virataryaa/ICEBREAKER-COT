@@ -563,6 +563,7 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         ]
     else:
         kpi_items = [
+            ("Spec Net",   _fmt("Spec Net"),   _chg("Spec Net")),
             ("MM Net",     _fmt("MM Net"),     _chg("MM Net")),
             ("Comm Net",   _fmt("Comm Net"),   _chg("Comm Net")),
             ("Swap Net",   _fmt("Swap Net"),   _chg("Swap Net")),
