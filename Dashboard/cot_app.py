@@ -53,6 +53,7 @@ COMM_COLORS = {
     "RC":  "#dc2626",
     "LCC": "#0891b2",
 }
+ACCENT = COMM_COLORS["RC"]  # fixed theme colour regardless of selected commodity
 COMM_NAMES = {
     "KC":  "KC — Arabica",
     "CC":  "CC — NYC Cocoa",
@@ -251,7 +252,7 @@ def _color_z(val):
 # UI HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 def comm_header(comm: str):
-    color = COMM_COLORS.get(comm, NAVY)
+    color = ACCENT
     st.markdown(
         f"<h4 style='font-size:1rem;font-weight:700;color:{color};"
         f"margin:18px 0 6px;padding:5px 14px;"
@@ -262,7 +263,7 @@ def comm_header(comm: str):
 
 
 def kpi_row(items: list, comm: str):
-    color = COMM_COLORS.get(comm, NAVY)
+    color = ACCENT
     r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
     html = "<div style='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px'>"
     for lbl, val, sub in items:
@@ -291,7 +292,7 @@ def weekly_change_bars(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool,
     if len(d) < 2:
         return go.Figure().update_layout(**_BASE, height=340)
 
-    color = COMM_COLORS.get(comm, NAVY)
+    color = ACCENT
     if spec:
         lc, shc, nc = (("Spec Long", "Spec Short", sc) if is_cit
                        else ("MM Long", "MM Short", sc))
@@ -335,7 +336,7 @@ def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool,
                     include_idx: bool = True) -> go.Figure:
     sc    = spec_col(is_cit, include_idx)
     d     = df[df["Commodity"] == comm].sort_values("Date")
-    color = COMM_COLORS.get(comm, NAVY)
+    color = ACCENT
     if d.empty:
         return go.Figure().update_layout(**_BASE, height=360)
 
@@ -463,7 +464,7 @@ def px_chg_vs_cot_scatter(df: pd.DataFrame, comm: str, x_col: str) -> go.Figure:
         x=d["Px"].pct_change().values * 100,
         y=d[x_col].diff().values,
         dates=d["Date"].values,
-        color=COMM_COLORS.get(comm, NAVY),
+        color=ACCENT,
         title=f"{x_col} Δ vs Price Chg %",
         xlabel="Price weekly chg %", ylabel=f"{x_col} Δ (k lots)",
     )
@@ -473,7 +474,7 @@ def position_vs_price_scatter(df: pd.DataFrame, comm: str, y_col: str) -> go.Fig
     d = df[df["Commodity"] == comm].sort_values("Date").dropna(subset=[y_col, "Px"])
     return _scatter_base(
         x=d["Px"].values, y=d[y_col].values, dates=d["Date"].values,
-        color=COMM_COLORS.get(comm, NAVY),
+        color=ACCENT,
         title=f"{y_col} vs Price",
         xlabel="Price", ylabel=f"{y_col} (k lots)",
     )
@@ -484,7 +485,7 @@ def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool,
     sc          = spec_col(is_cit, include_idx)
     d           = df[df["Commodity"] == comm].sort_values("Date")
     primary_net = "Comm Net" if is_cit else "Swap Net"
-    color       = COMM_COLORS.get(comm, NAVY)
+    color       = ACCENT
     specs_list  = [(sc, color), (primary_net, "#64748b"), ("Px", C_PRICE)]
     labels      = [f"{sc} Δ", f"{primary_net} Δ", "Px Δ"]
 
