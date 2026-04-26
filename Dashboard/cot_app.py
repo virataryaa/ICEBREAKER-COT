@@ -574,8 +574,8 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         ]
     kpi_row(kpi_items, comm)
 
-    # ── Collapsible data table ─────────────────────────────────────────────
-    with st.expander(f"{comm} — Weekly Data Table  (k lots)", expanded=False):
+    # ── Collapsible data tables (positions | weekly Δ) ────────────────────
+    with st.expander(f"{comm} — Weekly Data  (k lots)", expanded=False):
         if is_cit:
             tbl_cols   = ["Date", sc, "Spec Long", "Spec Short",
                           "Comm Net", "Comm Long", "Comm Short", "Index Net"]
@@ -585,38 +585,65 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
                           "Comm Net", "Comm Long", "Comm Short"]
             rename_map = {"MM Long": "Spec Long", "MM Short": "Spec Short"}
 
-        tbl = d[[c for c in tbl_cols if c in d.columns]].copy()
+        base = (d[[c for c in tbl_cols if c in d.columns]]
+                .copy()
+                .rename(columns=rename_map)
+                .sort_values("Date")
+                .reset_index(drop=True))
 
         rl = load_rollex(comm)
         if rl is not None:
             rl_reset          = rl[["rollex_px"]].reset_index()
             rl_reset.columns  = ["Date", "Rollex"]
-            rv                = _align_to_cot(d["Date"], rl_reset, "Date", "Rollex")
-            tbl["Rollex"]     = rv
-            tbl["Rollex %Δ"]  = (pd.Series(rv).pct_change() * 100).values
-            tbl               = tbl.drop(columns=["Rollex"])
+            rv                = _align_to_cot(base["Date"], rl_reset, "Date", "Rollex")
+            base["Rollex"]    = rv
+            base["Rollex %Δ"] = (pd.Series(rv).pct_change() * 100).values
+            base              = base.drop(columns=["Rollex"])
 
-        tbl = (tbl.rename(columns=rename_map)
-                  .sort_values("Date", ascending=False)
-                  .reset_index(drop=True))
-        tbl["Date"] = pd.to_datetime(tbl["Date"]).dt.strftime("%d %b %Y")
+        num_cols = [c for c in base.columns if c not in ("Date", "Rollex %Δ")]
 
-        num_cols = [c for c in tbl.columns if c not in ("Date", "Rollex %Δ")]
-        fmt      = {c: "{:.1f}" for c in num_cols}
-        if "Rollex %Δ" in tbl.columns:
-            fmt["Rollex %Δ"] = "{:+.2f}%"
+        # Build delta table (week-over-week diff of position cols)
+        chg = base.copy()
+        for nc in num_cols:
+            chg[nc] = chg[nc].diff()
 
-        def _hl_net(val):
+        # Sort both newest-first for display
+        base = base.sort_values("Date", ascending=False).reset_index(drop=True)
+        chg  = chg.sort_values("Date",  ascending=False).reset_index(drop=True)
+
+        date_str     = pd.to_datetime(base["Date"]).dt.strftime("%d %b '%y")
+        base["Date"] = date_str
+        chg["Date"]  = date_str
+
+        pos_fmt = {c: "{:.1f}" for c in num_cols}
+        chg_fmt = {c: "{:+.1f}" for c in num_cols}
+        for fmt in (pos_fmt, chg_fmt):
+            if "Rollex %Δ" in base.columns:
+                fmt["Rollex %Δ"] = "{:+.2f}%"
+
+        def _hl(val):
             if isinstance(val, str) or pd.isna(val):
                 return ""
             return f"color:{'#16a34a' if val > 0 else '#dc2626' if val < 0 else '#888'}"
 
-        net_cols = [c for c in tbl.columns if "Net" in c or c == "Rollex %Δ"]
-        styled = tbl.style.format(fmt, na_rep="—")
-        for nc in net_cols:
-            styled = styled.map(_hl_net, subset=[nc])
+        net_cols = [c for c in base.columns if "Net" in c or c == "Rollex %Δ"]
+        all_num  = [c for c in chg.columns  if c != "Date"]
 
-        st.dataframe(styled, use_container_width=True, height=420)
+        styled_base = base.style.format(pos_fmt, na_rep="—")
+        for nc in net_cols:
+            styled_base = styled_base.map(_hl, subset=[nc])
+
+        styled_chg = chg.style.format(chg_fmt, na_rep="—")
+        for nc in all_num:
+            styled_chg = styled_chg.map(_hl, subset=[nc])
+
+        c_left, c_right = st.columns(2)
+        with c_left:
+            st.caption("Positions")
+            st.dataframe(styled_base, use_container_width=True, height=400)
+        with c_right:
+            st.caption("Weekly Change Δ")
+            st.dataframe(styled_chg, use_container_width=True, height=400)
 
     c1, c2 = st.columns(2)
     with c1:
