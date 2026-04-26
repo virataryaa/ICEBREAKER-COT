@@ -53,7 +53,7 @@ COMM_COLORS = {
     "RC":  "#dc2626",
     "LCC": "#0891b2",
 }
-ACCENT = COMM_COLORS["RC"]  # fixed theme colour regardless of selected commodity
+ACCENT = COMM_COLORS["KC"]  # fixed theme colour regardless of selected commodity
 COMM_NAMES = {
     "KC":  "KC — Arabica",
     "CC":  "CC — NYC Cocoa",
