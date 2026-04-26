@@ -156,8 +156,10 @@ def load_rollex(comm: str):
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
-def spec_col(is_cit: bool) -> str:
-    return "Spec Net (Idx inc.)" if is_cit else "MM Net"
+def spec_col(is_cit: bool, include_idx: bool = True) -> str:
+    if is_cit:
+        return "Spec Net (Idx inc.)" if include_idx else "Spec Net"
+    return "MM Net"
 
 
 def _align_to_cot(cot_dates: pd.Series, ext_df: pd.DataFrame,
@@ -181,7 +183,8 @@ def _zscore(series: pd.Series, value: float) -> float:
     return float((value - mu) / sd) if sd else np.nan
 
 
-def build_zscore_matrix(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.DataFrame:
+def build_zscore_matrix(df_cit: pd.DataFrame, df_disagg: pd.DataFrame,
+                        include_idx: bool = True) -> pd.DataFrame:
     rows = []
     specs = [
         ("KC",  df_cit,    True),
@@ -195,7 +198,7 @@ def build_zscore_matrix(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.Dat
         d = df[df["Commodity"] == comm].sort_values("Date")
         if len(d) < 10:
             continue
-        sc  = spec_col(is_cit)
+        sc  = spec_col(is_cit, include_idx)
         row = {"Commodity": comm}
         col_map = [
             ("Spec Δ",       sc),
@@ -279,8 +282,9 @@ def kpi_row(items: list, comm: str):
 # ══════════════════════════════════════════════════════════════════════════════
 # CHART FUNCTIONS
 # ══════════════════════════════════════════════════════════════════════════════
-def weekly_change_bars(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) -> go.Figure:
-    sc = spec_col(is_cit)
+def weekly_change_bars(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool,
+                       include_idx: bool = True) -> go.Figure:
+    sc = spec_col(is_cit, include_idx)
     d  = df[df["Commodity"] == comm].sort_values("Date").tail(13)
     if len(d) < 2:
         return go.Figure().update_layout(**_BASE, height=340)
@@ -325,8 +329,9 @@ def weekly_change_bars(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) ->
     return fig
 
 
-def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool) -> go.Figure:
-    sc    = spec_col(is_cit)
+def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool,
+                    include_idx: bool = True) -> go.Figure:
+    sc    = spec_col(is_cit, include_idx)
     d     = df[df["Commodity"] == comm].sort_values("Date")
     color = COMM_COLORS.get(comm, NAVY)
     if d.empty:
@@ -472,8 +477,9 @@ def position_vs_price_scatter(df: pd.DataFrame, comm: str, y_col: str) -> go.Fig
     )
 
 
-def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool) -> go.Figure:
-    sc          = spec_col(is_cit)
+def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool,
+                   include_idx: bool = True) -> go.Figure:
+    sc          = spec_col(is_cit, include_idx)
     d           = df[df["Commodity"] == comm].sort_values("Date")
     primary_net = "Comm Net" if is_cit else "Swap Net"
     color       = COMM_COLORS.get(comm, NAVY)
@@ -512,14 +518,14 @@ def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool) -> go.Figure:
 # ══════════════════════════════════════════════════════════════════════════════
 # PER-COMMODITY BLOCK
 # ══════════════════════════════════════════════════════════════════════════════
-def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool):
+def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: bool = True):
     d = df[df["Commodity"] == comm].sort_values("Date")
     if d.empty:
         st.info(f"No data for {comm} in selected date range.")
         return
 
     comm_header(comm)
-    sc     = spec_col(is_cit)
+    sc     = spec_col(is_cit, include_idx)
     latest = d.iloc[-1]
     prev   = d.iloc[-2] if len(d) > 1 else latest
 
@@ -563,15 +569,15 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool):
 
     c1, c2 = st.columns(2)
     with c1:
-        st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=True),  use_container_width=True)
+        st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
     with c2:
-        st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=False), use_container_width=True)
+        st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=False, include_idx=include_idx), use_container_width=True)
 
     c1, c2 = st.columns(2)
     with c1:
-        st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=True),  use_container_width=True)
+        st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
     with c2:
-        st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=False), use_container_width=True)
+        st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=False, include_idx=include_idx), use_container_width=True)
 
     if is_cit:
         cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
@@ -596,7 +602,7 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool):
         sel_y = st.selectbox("Position (Y-axis)", pos_opts, key=f"pos_px_{comm}")
         st.plotly_chart(position_vs_price_scatter(df, comm, sel_y), use_container_width=True)
 
-    st.plotly_chart(histogram_trio(df, comm, is_cit), use_container_width=True)
+    st.plotly_chart(histogram_trio(df, comm, is_cit, include_idx=include_idx), use_container_width=True)
     st.markdown("---")
 
 
@@ -632,6 +638,11 @@ def main():
 
         st.markdown("---")
 
+        idx_choice  = st.radio("Spec Net", ["Include Index", "Exclude Index"], index=0)
+        include_idx = idx_choice == "Include Index"
+
+        st.markdown("---")
+
         date_range = st.slider(
             "Date range",
             min_value=min_d, max_value=max_d,
@@ -660,15 +671,16 @@ def main():
     tab_comm, tab_cross = st.tabs([COMM_NAMES.get(comm, comm), "Cross Commodity Analysis"])
 
     with tab_comm:
-        render_commodity(df_f, comm, is_cit=is_cit)
+        render_commodity(df_f, comm, is_cit=is_cit, include_idx=include_idx)
 
     with tab_cross:
+        idx_label = "Index included" if include_idx else "Index excluded"
         st.markdown(
             f"<p style='font-size:.8rem;color:{GRAY};margin-bottom:12px'>"
-            f"Weekly Δ z-scores across all commodities · same date range</p>",
+            f"Weekly Δ z-scores across all commodities · same date range · {idx_label}</p>",
             unsafe_allow_html=True,
         )
-        zdf = build_zscore_matrix(cit_f, disagg_f)
+        zdf = build_zscore_matrix(cit_f, disagg_f, include_idx=include_idx)
         if not zdf.empty:
             z_cols = list(zdf.columns)
             styled = (
