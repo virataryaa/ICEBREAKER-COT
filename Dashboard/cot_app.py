@@ -129,6 +129,7 @@ def load_disagg() -> pd.DataFrame:
     for c in DISAGG_POS_COLS:
         if c in df.columns:
             df[c] = df[c] / 1000.0
+    df["Comm Net"]           = df["Comm Long"]  - df["Comm Short"]
     df["Swap Net"]           = df["Swap Long"]  - df["Swap Short"]
     df["MM Net"]             = df["MM Long"]    - df["MM Short"]
     df["Others Net"]         = df["Other Long"] - df["Other Short"]
@@ -140,6 +141,7 @@ def load_disagg() -> pd.DataFrame:
         df["Other Long"] + df["Other Short"] +
         df["Non Rep Long"] + df["Non Rep Short"]
     ) / df["Total OI"]
+    df["Comm Participation"] = (df["Comm Long"] + df["Comm Short"]) / df["Total OI"]
     return df.sort_values(["Commodity", "Date"]).reset_index(drop=True)
 
 
@@ -204,9 +206,9 @@ def build_zscore_matrix(df_cit: pd.DataFrame, df_disagg: pd.DataFrame,
             ("Spec Δ",       sc),
             ("Spec Long Δ",  "Spec Long"  if is_cit else "MM Long"),
             ("Spec Short Δ", "Spec Short" if is_cit else "MM Short"),
-            ("Comm Δ",       "Comm Net"   if is_cit else "Swap Net"),
-            ("Comm Long Δ",  "Comm Long"  if is_cit else "Swap Long"),
-            ("Comm Short Δ", "Comm Short" if is_cit else "Swap Short"),
+            ("Comm Δ",       "Comm Net"),
+            ("Comm Long Δ",  "Comm Long"),
+            ("Comm Short Δ", "Comm Short"),
         ]
         for col_name, col in col_map:
             if col not in d.columns:
@@ -560,10 +562,12 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
     else:
         kpi_items = [
             ("MM Net",     _fmt("MM Net"),     _chg("MM Net")),
+            ("Comm Net",   _fmt("Comm Net"),   _chg("Comm Net")),
             ("Swap Net",   _fmt("Swap Net"),   _chg("Swap Net")),
             ("Others Net", _fmt("Others Net"), _chg("Others Net")),
             ("Price",      f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
             ("Spec %",     f"{latest['Spec Participation']*100:.1f}%" if pd.notna(latest["Spec Participation"]) else "—", ""),
+            ("Comm %",     f"{latest['Comm Participation']*100:.1f}%" if pd.notna(latest["Comm Participation"]) else "—", ""),
         ]
     kpi_row(kpi_items, comm)
 
@@ -584,8 +588,8 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
                     "Spec Long", "Spec Short", "Comm Long", "Comm Short",
                     "Spec Participation", "Comm Participation"]
     else:
-        cot_opts = ["MM Net", "Swap Net", "Others Net", "Non Rep Net", "Spec Net",
-                    "MM Long", "MM Short", "Swap Long", "Swap Short", "Spec Participation"]
+        cot_opts = ["MM Net", "Comm Net", "Swap Net", "Others Net", "Non Rep Net", "Spec Net",
+                    "MM Long", "MM Short", "Comm Long", "Comm Short", "Swap Long", "Swap Short", "Spec Participation"]
 
     with st.expander(f"{comm} — Scatter: Price Chg % vs COT Element Δ", expanded=False):
         sel_x = st.selectbox("COT element (X-axis)", cot_opts, key=f"px_cot_{comm}")
@@ -595,8 +599,8 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         pos_opts = [sc, "Comm Net", "Spec Long", "Comm Long",
                     "Spec Short", "Comm Short", "Index Net", "Non Rep Net"]
     else:
-        pos_opts = ["MM Net", "Swap Net", "Others Net", "Spec Net",
-                    "MM Long", "MM Short", "Swap Long", "Swap Short", "Non Rep Net"]
+        pos_opts = ["MM Net", "Comm Net", "Swap Net", "Others Net", "Spec Net",
+                    "MM Long", "MM Short", "Comm Long", "Comm Short", "Swap Long", "Swap Short", "Non Rep Net"]
 
     with st.expander(f"{comm} — Scatter: Net / Gross Long vs Price", expanded=False):
         sel_y = st.selectbox("Position (Y-axis)", pos_opts, key=f"pos_px_{comm}")

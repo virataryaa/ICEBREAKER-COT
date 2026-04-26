@@ -79,6 +79,8 @@ CIT_COMMODITIES = {
 # ── Disagg config ─────────────────────────────────────────────────────────────
 DISAGG_FIELDS = [
     'Open Interest All Close',
+    'Prod Merc Positions Long All Close',
+    'Prod Merc Positions Short All Close',
     'Swap Positions Long All Close',
     'Swap Positions Short All Close',
     'Swap Positions Spread All Close',
@@ -92,26 +94,30 @@ DISAGG_FIELDS = [
 ]
 
 DISAGG_COL_MAP = {
-    'Open Interest All Close':            'Total OI',
-    'Swap Positions Long All Close':      'Swap Long',
-    'Swap Positions Short All Close':     'Swap Short',
-    'Swap Positions Spread All Close':    'Swap Spread',
-    'M Money Positions Long All Close':   'MM Long',
-    'M Money Positions Short All Close':  'MM Short',
-    'M Money Positions Spread All Close': 'MM Spread',
+    'Open Interest All Close':              'Total OI',
+    'Prod Merc Positions Long All Close':   'Comm Long',
+    'Prod Merc Positions Short All Close':  'Comm Short',
+    'Swap Positions Long All Close':        'Swap Long',
+    'Swap Positions Short All Close':       'Swap Short',
+    'Swap Positions Spread All Close':      'Swap Spread',
+    'M Money Positions Long All Close':     'MM Long',
+    'M Money Positions Short All Close':    'MM Short',
+    'M Money Positions Spread All Close':   'MM Spread',
     'Other Rept Positions Long All Close':  'Other Long',
     'Other Rept Positions Short All Close': 'Other Short',
-    'Nonrept Positions Long All Close':   'Non Rep Long',
-    'Nonrept Positions Short All Close':  'Non Rep Short',
+    'Nonrept Positions Long All Close':     'Non Rep Long',
+    'Nonrept Positions Short All Close':    'Non Rep Short',
 }
 
 DISAGG_FINAL_COLS = ['Commodity', 'Date',
+                     'Comm Long', 'Comm Short',
                      'Swap Long', 'Swap Short', 'Swap Spread',
                      'MM Long', 'MM Short', 'MM Spread',
                      'Other Long', 'Other Short',
                      'Non Rep Long', 'Non Rep Short', 'Total OI', 'Px']
 
-DISAGG_INT_COLS = ['Swap Long', 'Swap Short', 'Swap Spread',
+DISAGG_INT_COLS = ['Comm Long', 'Comm Short',
+                   'Swap Long', 'Swap Short', 'Swap Spread',
                    'MM Long', 'MM Short', 'MM Spread',
                    'Other Long', 'Other Short',
                    'Non Rep Long', 'Non Rep Short', 'Total OI']
