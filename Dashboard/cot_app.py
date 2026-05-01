@@ -894,6 +894,70 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
     html += "</div>"
     st.markdown(html, unsafe_allow_html=True)
 
+    # ── Weekly data table ─────────────────────────────────────────────────────
+    with st.expander(f"{comm} — Old / New Crop Weekly Data  (k lots)", expanded=False):
+        # Build wide table: one row per date, columns = (Old|New) x metric
+        metrics = ["MM Net", "MM Long", "MM Short", "Comm Net", "Prod Long", "Prod Short", "Total OI"]
+
+        old_t   = old.set_index("Date")[metrics].copy() if not old.empty else pd.DataFrame(columns=metrics)
+        other_t = other.set_index("Date")[metrics].copy() if not other.empty else pd.DataFrame(columns=metrics)
+
+        old_t.columns   = pd.MultiIndex.from_tuples([("Old Crop",  c) for c in metrics])
+        other_t.columns = pd.MultiIndex.from_tuples([("New Crop",  c) for c in metrics])
+
+        wide = pd.concat([old_t, other_t], axis=1).sort_index(ascending=False)
+        wide_chg = wide.diff(-1)  # week-over-week delta (already sorted desc so diff(-1) = current - prior)
+
+        date_str = wide.index.strftime("%d %b '%y")
+        date_df  = pd.DataFrame({("", "Date"): date_str}, index=wide.index)
+
+        pos_df = wide.copy()
+        chg_df = wide_chg.copy()
+        pos_df.columns = pd.MultiIndex.from_tuples([("Positions", g, c) for g, c in pos_df.columns])
+        chg_df.columns = pd.MultiIndex.from_tuples([("Weekly Δ",  g, c) for g, c in chg_df.columns])
+        date_df.columns = pd.MultiIndex.from_tuples([("", "", "Date")])
+
+        combined = pd.concat([date_df, pos_df, chg_df], axis=1)
+
+        fmt = {}
+        for g in ("Old Crop", "New Crop"):
+            for c in metrics:
+                fmt[("Positions", g, c)] = "{:.1f}"
+                fmt[("Weekly Δ",  g, c)] = "{:+.1f}"
+
+        def _style_on(df):
+            out = pd.DataFrame("", index=df.index, columns=df.columns)
+            for col in df.columns:
+                if not isinstance(col, tuple) or col[0] == "":
+                    continue
+                section = col[0]
+                metric  = col[2]
+                for i in df.index:
+                    raw = df.at[i, col]
+                    try:
+                        v = float(raw)
+                        if np.isnan(v):
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+                    clr = "#16a34a" if v > 0 else "#dc2626" if v < 0 else "#888"
+                    if section == "Weekly Δ" or "Net" in metric:
+                        out.at[i, col] = f"color:{clr}"
+            return out
+
+        styled = (combined.style
+                          .format(fmt, na_rep="—")
+                          .apply(_style_on, axis=None)
+                          .hide(axis="index")
+                          .set_table_styles([
+                              {"selector": "thead tr th",
+                               "props": [("text-align", "center"),
+                                         ("font-weight", "600"),
+                                         ("font-size", "0.75rem"),
+                                         ("color", "#444")]},
+                          ]))
+        st.dataframe(styled, use_container_width=True, height=420)
+
     # ── Charts ────────────────────────────────────────────────────────────────
     st.plotly_chart(oi_split_bars(df_on, comm), use_container_width=True)
 
