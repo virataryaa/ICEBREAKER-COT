@@ -954,7 +954,7 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
         chg_df.columns = pd.MultiIndex.from_tuples([("Weekly Δ",  g, c) for g, c in chg_df.columns])
         date_df.columns = pd.MultiIndex.from_tuples([("", "", "Date")])
 
-        combined = pd.concat([date_df, pos_df, chg_df], axis=1)
+        combined = pd.concat([date_df, pos_df, chg_df], axis=1).reset_index(drop=True)
 
         fmt = {}
         for g in ("Old Crop", "New Crop"):
