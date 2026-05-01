@@ -840,6 +840,43 @@ def comm_net_split(df_on: pd.DataFrame, comm: str) -> go.Figure:
     return fig
 
 
+def gross_leg_chart(df_on: pd.DataFrame, comm: str, col: str, title: str) -> go.Figure:
+    old, other, alla = _on_pivot(df_on, comm)
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_trace(go.Scatter(
+        x=old.index, y=old[col], name=f"Old",
+        line=dict(color=C_OLD, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>Old: %{{y:.1f}}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=other.index, y=other[col], name=f"New",
+        line=dict(color=C_NEW, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>New: %{{y:.1f}}k<extra></extra>",
+    ), secondary_y=False)
+
+    if not alla.empty and "Px" in alla.columns:
+        fig.add_trace(go.Scatter(
+            x=alla.index, y=alla["Px"], name="Price",
+            line=dict(color=C_PRICE, width=1.4, dash="dot"), opacity=0.7,
+            hovertemplate="<b>%{x|%d %b %y}</b><br>Price: %{y:.2f}<extra></extra>",
+        ), secondary_y=True)
+
+    fig.update_layout(
+        **_BASE, height=320,
+        title=dict(text=f"{title}  ·  k lots", font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=55, t=40, b=70),
+        legend=dict(orientation="h", y=-0.24, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+    )
+    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
+    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
+                     showgrid=False, tickfont=dict(size=10, color="#888"))
+    return fig
+
+
 def render_oldnew(df_on: pd.DataFrame, comm: str):
     if df_on.empty:
         st.warning("cot_oldnew.parquet not found — run cot_oldnew.py first.")
@@ -966,6 +1003,19 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
         st.plotly_chart(mm_net_split(df_on, comm), use_container_width=True)
     with c2:
         st.plotly_chart(comm_net_split(df_on, comm), use_container_width=True)
+
+    st.markdown("<p style='font-size:.8rem;font-weight:700;color:#444;margin:18px 0 4px'>Gross Legs — Old vs New Crop</p>", unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        st.plotly_chart(gross_leg_chart(df_on, comm, "MM Long",   "MM Long"),   use_container_width=True)
+    with c2:
+        st.plotly_chart(gross_leg_chart(df_on, comm, "MM Short",  "MM Short"),  use_container_width=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.plotly_chart(gross_leg_chart(df_on, comm, "Prod Long",  "Comm Long"),  use_container_width=True)
+    with c2:
+        st.plotly_chart(gross_leg_chart(df_on, comm, "Prod Short", "Comm Short"), use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
