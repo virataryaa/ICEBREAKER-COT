@@ -761,119 +761,92 @@ def oi_split_bars(df_on: pd.DataFrame, comm: str) -> go.Figure:
 
 
 def mm_net_split(df_on: pd.DataFrame, comm: str) -> go.Figure:
-    old, other, alla = _on_pivot(df_on, comm)
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    old, other, _ = _on_pivot(df_on, comm)
+    fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=old.index, y=old["MM Net"], name="MM Old",
         line=dict(color=C_OLD, width=2.2, shape="spline", smoothing=0.6),
         hovertemplate="<b>%{x|%d %b %y}</b><br>MM Old Net: %{y:.1f}k<extra></extra>",
-    ), secondary_y=False)
+    ))
 
     fig.add_trace(go.Scatter(
         x=other.index, y=other["MM Net"], name="MM New",
         line=dict(color=C_NEW, width=2.2, shape="spline", smoothing=0.6),
         hovertemplate="<b>%{x|%d %b %y}</b><br>MM New Net: %{y:.1f}k<extra></extra>",
-    ), secondary_y=False)
+    ))
 
     fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.15)")
-
-    if not alla.empty and "Px" in alla.columns:
-        fig.add_trace(go.Scatter(
-            x=alla.index, y=alla["Px"], name="Price",
-            line=dict(color=C_PRICE, width=1.4, dash="dot"), opacity=0.75,
-            hovertemplate="<b>%{x|%d %b %y}</b><br>Price: %{y:.2f}<extra></extra>",
-        ), secondary_y=True)
 
     fig.update_layout(
         **_BASE, height=360,
         title=dict(text="Managed Money Net — Old vs New Crop  ·  k lots",
                    font=dict(size=12, color="#444"), x=0),
-        margin=dict(l=50, r=55, t=40, b=70),
+        margin=dict(l=50, r=20, t=40, b=70),
         legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center",
                     font_size=10, bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
     )
-    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
-    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
-                     showgrid=False, tickfont=dict(size=10, color="#888"))
+    fig.update_yaxes(title_text="k lots", title_font_size=10, **_ax())
     return fig
 
 
 def comm_net_split(df_on: pd.DataFrame, comm: str) -> go.Figure:
-    old, other, alla = _on_pivot(df_on, comm)
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    old, other, _ = _on_pivot(df_on, comm)
+    fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=old.index, y=old["Comm Net"], name="Comm Old",
         line=dict(color=C_OLD, width=2.2, shape="spline", smoothing=0.6),
         hovertemplate="<b>%{x|%d %b %y}</b><br>Comm Old Net: %{y:.1f}k<extra></extra>",
-    ), secondary_y=False)
+    ))
 
     fig.add_trace(go.Scatter(
         x=other.index, y=other["Comm Net"], name="Comm New",
         line=dict(color=C_NEW, width=2.2, shape="spline", smoothing=0.6),
         hovertemplate="<b>%{x|%d %b %y}</b><br>Comm New Net: %{y:.1f}k<extra></extra>",
-    ), secondary_y=False)
+    ))
 
     fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.15)")
-
-    if not alla.empty and "Px" in alla.columns:
-        fig.add_trace(go.Scatter(
-            x=alla.index, y=alla["Px"], name="Price",
-            line=dict(color=C_PRICE, width=1.4, dash="dot"), opacity=0.75,
-            hovertemplate="<b>%{x|%d %b %y}</b><br>Price: %{y:.2f}<extra></extra>",
-        ), secondary_y=True)
 
     fig.update_layout(
         **_BASE, height=360,
         title=dict(text="Commercial (Prod/Merc) Net — Old vs New Crop  ·  k lots",
                    font=dict(size=12, color="#444"), x=0),
-        margin=dict(l=50, r=55, t=40, b=70),
+        margin=dict(l=50, r=20, t=40, b=70),
         legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center",
                     font_size=10, bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
     )
-    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
-    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
-                     showgrid=False, tickfont=dict(size=10, color="#888"))
+    fig.update_yaxes(title_text="k lots", title_font_size=10, **_ax())
     return fig
 
 
 def gross_leg_chart(df_on: pd.DataFrame, comm: str, col: str, title: str) -> go.Figure:
-    old, other, alla = _on_pivot(df_on, comm)
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    old, other, _ = _on_pivot(df_on, comm)
+    fig = go.Figure()
 
     fig.add_trace(go.Scatter(
-        x=old.index, y=old[col], name=f"Old",
+        x=old.index, y=old[col], name="Old",
         line=dict(color=C_OLD, width=2.2, shape="spline", smoothing=0.6),
         hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>Old: %{{y:.1f}}k<extra></extra>",
-    ), secondary_y=False)
+    ))
 
     fig.add_trace(go.Scatter(
-        x=other.index, y=other[col], name=f"New",
+        x=other.index, y=other[col], name="New",
         line=dict(color=C_NEW, width=2.2, shape="spline", smoothing=0.6),
         hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>New: %{{y:.1f}}k<extra></extra>",
-    ), secondary_y=False)
-
-    if not alla.empty and "Px" in alla.columns:
-        fig.add_trace(go.Scatter(
-            x=alla.index, y=alla["Px"], name="Price",
-            line=dict(color=C_PRICE, width=1.4, dash="dot"), opacity=0.7,
-            hovertemplate="<b>%{x|%d %b %y}</b><br>Price: %{y:.2f}<extra></extra>",
-        ), secondary_y=True)
+    ))
 
     fig.update_layout(
         **_BASE, height=320,
         title=dict(text=f"{title}  ·  k lots", font=dict(size=12, color="#444"), x=0),
-        margin=dict(l=50, r=55, t=40, b=70),
+        margin=dict(l=50, r=20, t=40, b=70),
         legend=dict(orientation="h", y=-0.24, x=0.5, xanchor="center",
                     font_size=10, bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+        yaxis=dict(**_ax(), title_text="k lots", title_font_size=10),
     )
-    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
-    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
-                     showgrid=False, tickfont=dict(size=10, color="#888"))
     return fig
 
 
