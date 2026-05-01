@@ -993,7 +993,7 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
                                          ("font-size", "0.75rem"),
                                          ("color", "#444")]},
                           ]))
-        st.dataframe(styled, use_container_width=True, height=420)
+        st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
 
     # ── Charts ────────────────────────────────────────────────────────────────
     st.plotly_chart(oi_split_bars(df_on, comm), use_container_width=True)
