@@ -18,8 +18,9 @@ CODE_DIR    = Path(__file__).resolve().parent
 DB_DIR      = CODE_DIR.parent / "Database"
 ROLLEX_DIR  = DB_DIR / "Rollex"
 
-CIT_FILE    = DB_DIR / "cot_cit.parquet"
-DISAGG_FILE = DB_DIR / "cot_disagg.parquet"
+CIT_FILE     = DB_DIR / "cot_cit.parquet"
+DISAGG_FILE  = DB_DIR / "cot_disagg.parquet"
+OLDNEW_FILE  = DB_DIR / "cot_oldnew.parquet"
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="COT Dashboard", layout="wide",
@@ -44,6 +45,8 @@ GRAY  = "#6e6e73"
 C_LONG  = "#27ae60"
 C_SHORT = "#e74c3c"
 C_PRICE = "#f39c12"
+C_OLD   = "#e67e22"   # old crop — warm orange
+C_NEW   = "#2980b9"   # new crop — blue
 
 COMM_COLORS = {
     "KC":  "#1a56db",
@@ -145,6 +148,23 @@ def load_disagg() -> pd.DataFrame:
     ) / df["Total OI"]
     df["Comm Participation"] = (df["Comm Long"] + df["Comm Short"]) / df["Total OI"]
     return df.sort_values(["Commodity", "Date"]).reset_index(drop=True)
+
+
+@st.cache_data(ttl=600)
+def load_oldnew() -> pd.DataFrame:
+    if not OLDNEW_FILE.exists():
+        return pd.DataFrame()
+    df = pd.read_parquet(OLDNEW_FILE)
+    df["Date"] = pd.to_datetime(df["Date"])
+    pos_cols = ["Prod Long", "Prod Short", "MM Long", "MM Short", "MM Spread",
+                "Swap Long", "Swap Short", "Swap Spread",
+                "Other Long", "Other Short", "Non Rep Long", "Non Rep Short", "Total OI"]
+    for c in pos_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce") / 1000.0
+    df["MM Net"]   = df["MM Long"]   - df["MM Short"]
+    df["Comm Net"] = df["Prod Long"] - df["Prod Short"]
+    return df.sort_values(["Commodity", "Crop", "Date"]).reset_index(drop=True)
 
 
 @st.cache_data(ttl=600)
@@ -699,11 +719,198 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# OLD / NEW CROP CHARTS
+# ══════════════════════════════════════════════════════════════════════════════
+def _on_pivot(df_on: pd.DataFrame, comm: str):
+    """Return (old_df, other_df, all_df) indexed by Date for a commodity."""
+    d = df_on[df_on["Commodity"] == comm]
+    old   = d[d["Crop"] == "Old"].set_index("Date").sort_index()
+    other = d[d["Crop"] == "Other"].set_index("Date").sort_index()
+    alla  = d[d["Crop"] == "All"].set_index("Date").sort_index()
+    return old, other, alla
+
+
+def oi_split_bars(df_on: pd.DataFrame, comm: str) -> go.Figure:
+    old, other, _ = _on_pivot(df_on, comm)
+    dates = old.index.union(other.index).sort_values()
+
+    fig = go.Figure([
+        go.Bar(
+            x=dates, y=old.reindex(dates)["Total OI"],
+            name="Old Crop", marker=dict(color=C_OLD, opacity=0.85, line=dict(width=0)),
+            hovertemplate="<b>%{x|%d %b %y}</b><br>Old OI: %{y:.1f}k<extra></extra>",
+        ),
+        go.Bar(
+            x=dates, y=other.reindex(dates)["Total OI"],
+            name="New Crop", marker=dict(color=C_NEW, opacity=0.85, line=dict(width=0)),
+            hovertemplate="<b>%{x|%d %b %y}</b><br>New OI: %{y:.1f}k<extra></extra>",
+        ),
+    ])
+    fig.update_layout(
+        **_BASE, barmode="stack", height=320,
+        title=dict(text="Open Interest — Old vs New Crop  ·  k lots",
+                   font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=16, t=40, b=70),
+        legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+        yaxis=dict(**_ax(), title_text="k lots", title_font_size=10),
+        bargap=0.18,
+    )
+    return fig
+
+
+def mm_net_split(df_on: pd.DataFrame, comm: str) -> go.Figure:
+    old, other, alla = _on_pivot(df_on, comm)
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_trace(go.Scatter(
+        x=old.index, y=old["MM Net"], name="MM Old",
+        line=dict(color=C_OLD, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%d %b %y}</b><br>MM Old Net: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=other.index, y=other["MM Net"], name="MM New",
+        line=dict(color=C_NEW, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%d %b %y}</b><br>MM New Net: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.15)")
+
+    if not alla.empty and "Px" in alla.columns:
+        fig.add_trace(go.Scatter(
+            x=alla.index, y=alla["Px"], name="Price",
+            line=dict(color=C_PRICE, width=1.4, dash="dot"), opacity=0.75,
+            hovertemplate="<b>%{x|%d %b %y}</b><br>Price: %{y:.2f}<extra></extra>",
+        ), secondary_y=True)
+
+    fig.update_layout(
+        **_BASE, height=360,
+        title=dict(text="Managed Money Net — Old vs New Crop  ·  k lots",
+                   font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=55, t=40, b=70),
+        legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+    )
+    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
+    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
+                     showgrid=False, tickfont=dict(size=10, color="#888"))
+    return fig
+
+
+def comm_net_split(df_on: pd.DataFrame, comm: str) -> go.Figure:
+    old, other, alla = _on_pivot(df_on, comm)
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_trace(go.Scatter(
+        x=old.index, y=old["Comm Net"], name="Comm Old",
+        line=dict(color=C_OLD, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%d %b %y}</b><br>Comm Old Net: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=other.index, y=other["Comm Net"], name="Comm New",
+        line=dict(color=C_NEW, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%d %b %y}</b><br>Comm New Net: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.15)")
+
+    if not alla.empty and "Px" in alla.columns:
+        fig.add_trace(go.Scatter(
+            x=alla.index, y=alla["Px"], name="Price",
+            line=dict(color=C_PRICE, width=1.4, dash="dot"), opacity=0.75,
+            hovertemplate="<b>%{x|%d %b %y}</b><br>Price: %{y:.2f}<extra></extra>",
+        ), secondary_y=True)
+
+    fig.update_layout(
+        **_BASE, height=360,
+        title=dict(text="Commercial (Prod/Merc) Net — Old vs New Crop  ·  k lots",
+                   font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=55, t=40, b=70),
+        legend=dict(orientation="h", y=-0.22, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+    )
+    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
+    fig.update_yaxes(title_text="Price",  title_font_size=10, secondary_y=True,
+                     showgrid=False, tickfont=dict(size=10, color="#888"))
+    return fig
+
+
+def render_oldnew(df_on: pd.DataFrame, comm: str):
+    if df_on.empty:
+        st.warning("cot_oldnew.parquet not found — run cot_oldnew.py first.")
+        return
+
+    d = df_on[df_on["Commodity"] == comm]
+    if d.empty:
+        st.info(f"No old/new crop data for {comm} in selected range.")
+        return
+
+    old  = d[d["Crop"] == "Old"].sort_values("Date")
+    other = d[d["Crop"] == "Other"].sort_values("Date")
+    alla  = d[d["Crop"] == "All"].sort_values("Date")
+
+    # ── KPI row ───────────────────────────────────────────────────────────────
+    def _v(df, col): return float(df[col].iloc[-1]) if not df.empty and col in df.columns else np.nan
+    def _fmt(v): return "—" if np.isnan(v) else f"{v:.1f}k"
+    def _pct(a, b):
+        t = a + b
+        return f"{a/t*100:.0f}% / {b/t*100:.0f}%" if t else "—"
+
+    oi_old   = _v(old,   "Total OI")
+    oi_other = _v(other, "Total OI")
+    mm_old   = _v(old,   "MM Net")
+    mm_other = _v(other, "MM Net")
+    cm_old   = _v(old,   "Comm Net")
+    cm_other = _v(other, "Comm Net")
+    px_now   = _v(alla,  "Px")
+
+    color = ACCENT
+    r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    html = "<div style='display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px'>"
+    cards = [
+        ("OI Old / New", _pct(oi_old, oi_other), ""),
+        ("OI Old",       _fmt(oi_old),            ""),
+        ("OI New",       _fmt(oi_other),           ""),
+        ("MM Net Old",   _fmt(mm_old),             ""),
+        ("MM Net New",   _fmt(mm_other),            ""),
+        ("Comm Net Old", _fmt(cm_old),             ""),
+        ("Comm Net New", _fmt(cm_other),            ""),
+        ("Price",        f"{px_now:.2f}" if not np.isnan(px_now) else "—", ""),
+    ]
+    for lbl, val, _ in cards:
+        html += (
+            f"<div style='background:rgba({r},{g},{b},0.06);border:1px solid rgba({r},{g},{b},0.15);"
+            f"border-radius:10px;padding:7px 15px;min-width:105px;display:flex;flex-direction:column'>"
+            f"<span style='font-size:.56rem;color:#999;text-transform:uppercase;"
+            f"letter-spacing:.1em;margin-bottom:2px'>{lbl}</span>"
+            f"<span style='font-size:.92rem;font-weight:700;color:{color}'>{val}</span>"
+            f"</div>"
+        )
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+    # ── Charts ────────────────────────────────────────────────────────────────
+    st.plotly_chart(oi_split_bars(df_on, comm), use_container_width=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.plotly_chart(mm_net_split(df_on, comm), use_container_width=True)
+    with c2:
+        st.plotly_chart(comm_net_split(df_on, comm), use_container_width=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 def main():
     df_cit    = load_cit()
     df_disagg = load_disagg()
+    df_on     = load_oldnew()
 
     all_dates = pd.concat([df_cit["Date"], df_disagg["Date"]])
     min_d     = all_dates.min().date()
@@ -760,10 +967,16 @@ def main():
     )
     st.markdown("---")
 
-    tab_comm, tab_cross = st.tabs([COMM_NAMES.get(comm, comm), "Cross Commodity Analysis"])
+    tab_comm, tab_cross, tab_crop = st.tabs([
+        COMM_NAMES.get(comm, comm), "Cross Commodity Analysis", "Old / New Crop"
+    ])
 
     with tab_comm:
         render_commodity(df_f, comm, is_cit=is_cit, include_idx=include_idx)
+
+    with tab_crop:
+        on_f = df_on[df_on["Date"] >= d_start] if not df_on.empty else df_on
+        render_oldnew(on_f, comm)
 
     with tab_cross:
         idx_label = "Index included" if include_idx else "Index excluded"
