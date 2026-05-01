@@ -850,6 +850,34 @@ def gross_leg_chart(df_on: pd.DataFrame, comm: str, col: str, title: str) -> go.
     return fig
 
 
+def stacked_leg_chart(df_on: pd.DataFrame, comm: str, col: str, title: str) -> go.Figure:
+    old, other, _ = _on_pivot(df_on, comm)
+    dates = old.index.union(other.index).sort_values()
+    fig = go.Figure([
+        go.Bar(
+            x=dates, y=old.reindex(dates)[col],
+            name="Old", marker=dict(color=C_OLD, opacity=0.85, line=dict(width=0)),
+            hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>Old: %{{y:.1f}}k<extra></extra>",
+        ),
+        go.Bar(
+            x=dates, y=other.reindex(dates)[col],
+            name="New", marker=dict(color=C_NEW, opacity=0.85, line=dict(width=0)),
+            hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>New: %{{y:.1f}}k<extra></extra>",
+        ),
+    ])
+    fig.update_layout(
+        **_BASE, barmode="stack", height=300,
+        title=dict(text=f"{title} — Stacked  ·  k lots", font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=20, t=40, b=70),
+        legend=dict(orientation="h", y=-0.26, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%d %b '%y"),
+        yaxis=dict(**_ax(), title_text="k lots", title_font_size=10),
+        bargap=0.12,
+    )
+    return fig
+
+
 def render_oldnew(df_on: pd.DataFrame, comm: str):
     if df_on.empty:
         st.warning("cot_oldnew.parquet not found — run cot_oldnew.py first.")
@@ -968,27 +996,31 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
                           ]))
         st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
 
-    # ── Charts ────────────────────────────────────────────────────────────────
-    st.plotly_chart(oi_split_bars(df_on, comm), use_container_width=True)
+    # ── OI split ──────────────────────────────────────────────────────────────
+    with st.expander("Open Interest — Old vs New Crop", expanded=True):
+        st.plotly_chart(oi_split_bars(df_on, comm), use_container_width=True)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(mm_net_split(df_on, comm), use_container_width=True)
-    with c2:
-        st.plotly_chart(comm_net_split(df_on, comm), use_container_width=True)
+    # ── Net positions ─────────────────────────────────────────────────────────
+    with st.expander("Net Positions — MM & Commercial", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(mm_net_split(df_on, comm), use_container_width=True)
+        with c2:
+            st.plotly_chart(comm_net_split(df_on, comm), use_container_width=True)
 
-    st.markdown("<p style='font-size:.8rem;font-weight:700;color:#444;margin:18px 0 4px'>Gross Legs — Old vs New Crop</p>", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(gross_leg_chart(df_on, comm, "MM Long",   "MM Long"),   use_container_width=True)
-    with c2:
-        st.plotly_chart(gross_leg_chart(df_on, comm, "MM Short",  "MM Short"),  use_container_width=True)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(gross_leg_chart(df_on, comm, "Prod Long",  "Comm Long"),  use_container_width=True)
-    with c2:
-        st.plotly_chart(gross_leg_chart(df_on, comm, "Prod Short", "Comm Short"), use_container_width=True)
+    # ── Gross legs ────────────────────────────────────────────────────────────
+    with st.expander("Gross Legs — Old vs New Crop", expanded=True):
+        for col, title in [
+            ("MM Long",   "MM Long"),
+            ("MM Short",  "MM Short"),
+            ("Prod Long",  "Comm Long"),
+            ("Prod Short", "Comm Short"),
+        ]:
+            c1, c2 = st.columns(2)
+            with c1:
+                st.plotly_chart(gross_leg_chart(df_on, comm, col, title), use_container_width=True)
+            with c2:
+                st.plotly_chart(stacked_leg_chart(df_on, comm, col, title), use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
