@@ -1112,7 +1112,13 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
     alla  = d[d["Crop"] == "All"].sort_values("Date")
 
     # ── KPI row ───────────────────────────────────────────────────────────────
-    def _v(df, col): return float(df[col].iloc[-1]) if not df.empty and col in df.columns else np.nan
+    def _v(df, col):
+        if df.empty or col not in df.columns:
+            return np.nan
+        try:
+            return float(df[col].iloc[-1])
+        except (TypeError, ValueError):
+            return np.nan
     def _fmt(v): return "—" if np.isnan(v) else f"{v:.1f}k"
     def _pct(a, b):
         t = a + b
