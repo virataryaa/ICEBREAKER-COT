@@ -888,14 +888,21 @@ def _seasonal_wide(df_on: pd.DataFrame, comm: str) -> pd.DataFrame:
     old, other = old.loc[common], other.loc[common]
 
     wide = pd.DataFrame(index=common)
-    wide["MM Net Old"]      = old["MM Net"]
-    wide["MM Net New"]      = other["MM Net"]
-    wide["MM Diff"]         = wide["MM Net Old"] - wide["MM Net New"]
-    wide["Comm Short New"]  = other["Prod Short"]
     oi_sum = old["Total OI"] + other["Total OI"]
-    wide["OI Old %"]        = old["Total OI"] / oi_sum * 100
-    wide["Week"]            = wide.index.isocalendar().week.astype(int)
-    wide["Year"]            = wide.index.year
+    wide["OI Old %"]       = old["Total OI"] / oi_sum * 100
+    wide["MM Net Old"]     = old["MM Net"]
+    wide["MM Net New"]     = other["MM Net"]
+    wide["MM Long Old"]    = old["MM Long"]
+    wide["MM Long New"]    = other["MM Long"]
+    wide["MM Short Old"]   = old["MM Short"]
+    wide["MM Short New"]   = other["MM Short"]
+    wide["MM Diff"]        = wide["MM Net Old"] - wide["MM Net New"]
+    wide["Comm Net Old"]   = old["Comm Net"]
+    wide["Comm Net New"]   = other["Comm Net"]
+    wide["Comm Short Old"] = old["Prod Short"]
+    wide["Comm Short New"] = other["Prod Short"]
+    wide["Week"]           = wide.index.isocalendar().week.astype(int)
+    wide["Year"]           = wide.index.year
     return wide.reset_index()
 
 
@@ -1265,60 +1272,108 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
         )
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(seasonality_chart(
-                df_seas, comm, "OI Old %",
-                "OI Old Crop % of Total", ylabel="%"
-            ), use_container_width=True)
+            st.plotly_chart(seasonality_chart(df_seas, comm, "OI Old %",
+                "OI Old Crop % of Total", ylabel="%"), use_container_width=True)
         with c2:
-            st.plotly_chart(seasonality_chart(
-                df_seas, comm, "MM Net Old",
-                "MM Net — Old Crop  ·  k lots", ylabel="k lots"
-            ), use_container_width=True)
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Diff",
+                "MM Net Old minus New Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(seasonality_chart(
-                df_seas, comm, "Comm Short New",
-                "Comm Short — New Crop (Forward Selling)  ·  k lots", ylabel="k lots"
-            ), use_container_width=True)
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Net Old",
+                "MM Net — Old Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
         with c2:
-            st.plotly_chart(seasonality_chart(
-                df_seas, comm, "MM Diff",
-                "MM Net Old minus New Crop  ·  k lots", ylabel="k lots"
-            ), use_container_width=True)
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Net New",
+                "MM Net — New Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Long Old",
+                "MM Long — Old Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Long New",
+                "MM Long — New Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Short Old",
+                "MM Short — Old Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "MM Short New",
+                "MM Short — New Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "Comm Net Old",
+                "Comm Net — Old Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "Comm Net New",
+                "Comm Net — New Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "Comm Short Old",
+                "Comm Short — Old Crop  ·  k lots", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(seasonality_chart(df_seas, comm, "Comm Short New",
+                "Comm Short — New Crop (Forward Selling)  ·  k lots", ylabel="k lots"), use_container_width=True)
 
     # ── Crop year seasonality ─────────────────────────────────────────────────
     with st.expander("Seasonality — Crop Year (Oct → Sep)", expanded=False):
         cur_cy = _current_crop_year_label()
         st.markdown(
             f"<p style='font-size:.75rem;color:{GRAY};margin-bottom:10px'>"
-            f"X-axis = crop year months Oct→Sep · Each line = one crop year · "
+            f"X-axis = crop year (Oct → Sep) · Each line = one crop year · "
             f"Bold <span style='color:{C_OLD}'>{cur_cy}</span> = current crop year</p>",
             unsafe_allow_html=True,
         )
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(
-                df_seas, comm, "OI Old %",
-                "OI Old Crop % of Total — Crop Year", ylabel="%"
-            ), use_container_width=True)
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "OI Old %",
+                "OI Old Crop % of Total — Crop Year", ylabel="%"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(
-                df_seas, comm, "MM Net Old",
-                "MM Net — Old Crop  ·  Crop Year", ylabel="k lots"
-            ), use_container_width=True)
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Diff",
+                "MM Net Old minus New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(
-                df_seas, comm, "Comm Short New",
-                "Comm Short — New Crop (Forward Selling)  ·  Crop Year", ylabel="k lots"
-            ), use_container_width=True)
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Net Old",
+                "MM Net — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(
-                df_seas, comm, "MM Diff",
-                "MM Net Old minus New Crop  ·  Crop Year", ylabel="k lots"
-            ), use_container_width=True)
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Net New",
+                "MM Net — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Long Old",
+                "MM Long — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Long New",
+                "MM Long — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Short Old",
+                "MM Short — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Short New",
+                "MM Short — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Net Old",
+                "Comm Net — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Net New",
+                "Comm Net — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Short Old",
+                "Comm Short — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+        with c2:
+            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Short New",
+                "Comm Short — New Crop (Forward Selling)  ·  Crop Year", ylabel="k lots"), use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
