@@ -25,7 +25,7 @@ from datetime import datetime
 
 DB_DIR     = Path(r"C:\Users\virat.arya\ETG\SoftsDatabase - Documents\Database\Hardmine\ICEBREAKER\COT\Database")
 OUT_PATH   = DB_DIR / "cot_oldnew.parquet"
-START_DATE = "2025-03-20"
+START_DATE = "2014-01-01"
 
 COMMODITIES = {
     "KC":  {"cot_sym": "KC #COMB-CFTC",      "px_sym": "%KC 1!"},
@@ -115,7 +115,7 @@ INT_COLS = [
 ]
 
 
-def fetch_crop(cot_sym, crop, start, end):
+def _fetch_crop_chunk(cot_sym, crop, start, end):
     fields = FIELDS[crop]
     try:
         data = ice.get_timeseries(cot_sym, fields, granularity="D",
@@ -135,6 +135,28 @@ def fetch_crop(cot_sym, crop, start, end):
     except Exception as e:
         print(f"  ERROR {cot_sym} [{crop}]: {e}")
         return None
+
+
+def fetch_crop(cot_sym, crop, start, end):
+    """Fetch in yearly chunks to avoid ICE row limits."""
+    start_dt = pd.Timestamp(start)
+    end_dt   = pd.Timestamp(end)
+    chunks   = []
+    year = start_dt.year
+    while True:
+        chunk_start = max(start_dt, pd.Timestamp(f"{year}-01-01"))
+        chunk_end   = min(end_dt,   pd.Timestamp(f"{year}-12-31"))
+        df = _fetch_crop_chunk(cot_sym, crop,
+                               chunk_start.strftime("%Y-%m-%d"),
+                               chunk_end.strftime("%Y-%m-%d"))
+        if df is not None and not df.empty:
+            chunks.append(df)
+        year += 1
+        if chunk_end >= end_dt:
+            break
+    if not chunks:
+        return None
+    return pd.concat(chunks).sort_index()
 
 
 def fetch_px(px_sym, start, end):
