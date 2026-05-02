@@ -983,12 +983,12 @@ def seasonality_chart(df_on: pd.DataFrame, comm: str,
     return fig
 
 
-CROP_START_MONTH = 10  # October — KC/CC/RC crop year start
+CROP_START_MONTH = 9  # September — crop year start for KC/CC/RC
 
 # Approximate week-within-crop-year where each month label sits
 CROP_WEEK_TICKS = {
-    1:"Oct", 5:"Nov", 9:"Dec", 14:"Jan", 18:"Feb", 22:"Mar",
-    26:"Apr", 31:"May", 35:"Jun", 39:"Jul", 44:"Aug", 48:"Sep"
+    1:"Sep", 5:"Oct", 9:"Nov", 14:"Dec", 18:"Jan", 22:"Feb",
+    26:"Mar", 30:"Apr", 35:"May", 39:"Jun", 43:"Jul", 48:"Aug"
 }
 
 
@@ -1088,7 +1088,7 @@ def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
         xaxis=dict(**_ax(x=True),
                    tickvals=list(CROP_WEEK_TICKS.keys()),
                    ticktext=list(CROP_WEEK_TICKS.values()),
-                   title_text="Crop Year (Oct → Sep)"),
+                   title_text="Crop Year (Sep → Aug)"),
         yaxis=dict(**_ax(), title_text=ylabel or metric, title_font_size=10),
     )
     return fig
@@ -1319,11 +1319,11 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
                 "Comm Short — New Crop (Forward Selling)  ·  k lots", ylabel="k lots"), use_container_width=True)
 
     # ── Crop year seasonality ─────────────────────────────────────────────────
-    with st.expander("Seasonality — Crop Year (Oct → Sep)", expanded=False):
+    with st.expander("Seasonality — Crop Year (Sep → Aug)", expanded=False):
         cur_cy = _current_crop_year_label()
         st.markdown(
             f"<p style='font-size:.75rem;color:{GRAY};margin-bottom:10px'>"
-            f"X-axis = crop year (Oct → Sep) · Each line = one crop year · "
+            f"X-axis = crop year (Sep → Aug) · Each line = one crop year · "
             f"Bold <span style='color:{C_OLD}'>{cur_cy}</span> = current crop year</p>",
             unsafe_allow_html=True,
         )
