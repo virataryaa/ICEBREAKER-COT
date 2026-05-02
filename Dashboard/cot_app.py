@@ -976,10 +976,13 @@ def seasonality_chart(df_on: pd.DataFrame, comm: str,
     return fig
 
 
-CROP_MONTH_LABELS = {1:"Oct", 2:"Nov", 3:"Dec", 4:"Jan", 5:"Feb", 6:"Mar",
-                     7:"Apr", 8:"May", 9:"Jun", 10:"Jul", 11:"Aug", 12:"Sep"}
+CROP_START_MONTH = 10  # October — KC/CC/RC crop year start
 
-CROP_START_MONTH  = 10  # October — KC/CC/RC crop year start
+# Approximate week-within-crop-year where each month label sits
+CROP_WEEK_TICKS = {
+    1:"Oct", 5:"Nov", 9:"Dec", 14:"Jan", 18:"Feb", 22:"Mar",
+    26:"Apr", 31:"May", 35:"Jun", 39:"Jul", 44:"Aug", 48:"Sep"
+}
 
 
 def _crop_year_label(dt, start_month=CROP_START_MONTH):
@@ -989,18 +992,19 @@ def _crop_year_label(dt, start_month=CROP_START_MONTH):
     return f"{str(y-1)[2:]}/{str(y)[2:]}"
 
 
-def _crop_month(m, start_month=CROP_START_MONTH):
-    if m >= start_month:
-        return m - start_month + 1
-    return m + (12 - start_month + 1)
+def _crop_week_num(date, start_month=CROP_START_MONTH):
+    """Week number within crop year: 1 = first week of October."""
+    y = date.year if date.month >= start_month else date.year - 1
+    crop_start = pd.Timestamp(y, start_month, 1)
+    return max(1, (date - crop_start).days // 7 + 1)
 
 
 def _seasonal_wide_cropyr(df_on: pd.DataFrame, comm: str) -> pd.DataFrame:
     wide = _seasonal_wide(df_on, comm)
     if wide.empty:
         return wide
-    wide["CropYear"]  = wide["Date"].apply(_crop_year_label)
-    wide["CropMonth"] = wide["Date"].dt.month.apply(_crop_month)
+    wide["CropYear"] = wide["Date"].apply(_crop_year_label)
+    wide["CropWeek"] = wide["Date"].apply(_crop_week_num)
     return wide
 
 
@@ -1015,9 +1019,9 @@ def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
     if wide.empty or metric not in wide.columns:
         return go.Figure().update_layout(**_BASE, height=340)
 
-    pivot = wide.pivot_table(index="CropMonth", columns="CropYear",
+    pivot = wide.pivot_table(index="CropWeek", columns="CropYear",
                              values=metric, aggfunc="mean")
-    pivot = pivot.reindex(range(1, 13))
+    pivot = pivot[pivot.index <= 52]
 
     cur_label  = _current_crop_year_label()
     hist_cols  = [c for c in pivot.columns if c != cur_label]
@@ -1075,9 +1079,9 @@ def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
         legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center",
                     font_size=10, bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(**_ax(x=True),
-                   tickvals=list(CROP_MONTH_LABELS.keys()),
-                   ticktext=list(CROP_MONTH_LABELS.values()),
-                   title_text="Crop Month (Oct → Sep)"),
+                   tickvals=list(CROP_WEEK_TICKS.keys()),
+                   ticktext=list(CROP_WEEK_TICKS.values()),
+                   title_text="Crop Year (Oct → Sep)"),
         yaxis=dict(**_ax(), title_text=ylabel or metric, title_font_size=10),
     )
     return fig
