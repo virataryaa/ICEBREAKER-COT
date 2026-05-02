@@ -976,6 +976,113 @@ def seasonality_chart(df_on: pd.DataFrame, comm: str,
     return fig
 
 
+CROP_MONTH_LABELS = {1:"Oct", 2:"Nov", 3:"Dec", 4:"Jan", 5:"Feb", 6:"Mar",
+                     7:"Apr", 8:"May", 9:"Jun", 10:"Jul", 11:"Aug", 12:"Sep"}
+
+CROP_START_MONTH  = 10  # October — KC/CC/RC crop year start
+
+
+def _crop_year_label(dt, start_month=CROP_START_MONTH):
+    y, m = dt.year, dt.month
+    if m >= start_month:
+        return f"{str(y)[2:]}/{str(y+1)[2:]}"
+    return f"{str(y-1)[2:]}/{str(y)[2:]}"
+
+
+def _crop_month(m, start_month=CROP_START_MONTH):
+    if m >= start_month:
+        return m - start_month + 1
+    return m + (12 - start_month + 1)
+
+
+def _seasonal_wide_cropyr(df_on: pd.DataFrame, comm: str) -> pd.DataFrame:
+    wide = _seasonal_wide(df_on, comm)
+    if wide.empty:
+        return wide
+    wide["CropYear"]  = wide["Date"].apply(_crop_year_label)
+    wide["CropMonth"] = wide["Date"].dt.month.apply(_crop_month)
+    return wide
+
+
+def _current_crop_year_label():
+    today = pd.Timestamp.now()
+    return _crop_year_label(today)
+
+
+def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
+                              metric: str, title: str, ylabel: str = "") -> go.Figure:
+    wide = _seasonal_wide_cropyr(df_on, comm)
+    if wide.empty or metric not in wide.columns:
+        return go.Figure().update_layout(**_BASE, height=340)
+
+    pivot = wide.pivot_table(index="CropMonth", columns="CropYear",
+                             values=metric, aggfunc="mean")
+    pivot = pivot.reindex(range(1, 13))
+
+    cur_label  = _current_crop_year_label()
+    hist_cols  = [c for c in pivot.columns if c != cur_label]
+    hist       = pivot[hist_cols]
+
+    p25    = hist.quantile(0.25, axis=1)
+    p75    = hist.quantile(0.75, axis=1)
+    median = hist.median(axis=1)
+
+    r, g, b = int(ACCENT[1:3], 16), int(ACCENT[3:5], 16), int(ACCENT[5:7], 16)
+    fig = go.Figure()
+
+    # Historical faint lines
+    for yr in hist_cols:
+        fig.add_trace(go.Scatter(
+            x=pivot.index, y=hist[yr], mode="lines",
+            line=dict(color="rgba(150,150,150,0.18)", width=1),
+            name=yr, showlegend=False, hovertemplate=f"{yr}  %{{y:.1f}}<extra></extra>",
+        ))
+
+    # Percentile band
+    xs = list(p75.index) + list(p75.index[::-1])
+    ys = list(p75.values) + list(p25.values[::-1])
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, fill="toself",
+        fillcolor=f"rgba({r},{g},{b},0.10)",
+        line=dict(width=0), name="25–75th pct", hoverinfo="skip",
+    ))
+
+    # Median
+    fig.add_trace(go.Scatter(
+        x=median.index, y=median.values, mode="lines",
+        name="Median",
+        line=dict(color=f"rgba({r},{g},{b},0.55)", width=1.6, dash="dash"),
+        hovertemplate="Month %{x}  Median: %{y:.1f}<extra></extra>",
+    ))
+
+    # Current crop year
+    if cur_label in pivot.columns:
+        cy = pivot[cur_label].dropna()
+        fig.add_trace(go.Scatter(
+            x=cy.index, y=cy.values, mode="lines+markers",
+            name=cur_label,
+            line=dict(color=C_OLD, width=2.6),
+            marker=dict(size=5, color=C_OLD),
+            hovertemplate=f"{cur_label}  %{{y:.1f}}<extra></extra>",
+        ))
+
+    fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.12)")
+
+    fig.update_layout(
+        **_BASE, height=340,
+        title=dict(text=title, font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=20, t=40, b=60),
+        legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True),
+                   tickvals=list(CROP_MONTH_LABELS.keys()),
+                   ticktext=list(CROP_MONTH_LABELS.values()),
+                   title_text="Crop Month (Oct → Sep)"),
+        yaxis=dict(**_ax(), title_text=ylabel or metric, title_font_size=10),
+    )
+    return fig
+
+
 def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = None):
     """df_on = date-filtered for charts; df_on_full = unfiltered for seasonality."""
     if df_on.empty:
@@ -1174,6 +1281,39 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
             st.plotly_chart(seasonality_chart(
                 df_seas, comm, "MM Diff",
                 "MM Net Old minus New Crop  ·  k lots", ylabel="k lots"
+            ), use_container_width=True)
+
+    # ── Crop year seasonality ─────────────────────────────────────────────────
+    with st.expander("Seasonality — Crop Year (Oct → Sep)", expanded=False):
+        cur_cy = _current_crop_year_label()
+        st.markdown(
+            f"<p style='font-size:.75rem;color:{GRAY};margin-bottom:10px'>"
+            f"X-axis = crop year months Oct→Sep · Each line = one crop year · "
+            f"Bold <span style='color:{C_OLD}'>{cur_cy}</span> = current crop year</p>",
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(cropyr_seasonality_chart(
+                df_seas, comm, "OI Old %",
+                "OI Old Crop % of Total — Crop Year", ylabel="%"
+            ), use_container_width=True)
+        with c2:
+            st.plotly_chart(cropyr_seasonality_chart(
+                df_seas, comm, "MM Net Old",
+                "MM Net — Old Crop  ·  Crop Year", ylabel="k lots"
+            ), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(cropyr_seasonality_chart(
+                df_seas, comm, "Comm Short New",
+                "Comm Short — New Crop (Forward Selling)  ·  Crop Year", ylabel="k lots"
+            ), use_container_width=True)
+        with c2:
+            st.plotly_chart(cropyr_seasonality_chart(
+                df_seas, comm, "MM Diff",
+                "MM Net Old minus New Crop  ·  Crop Year", ylabel="k lots"
             ), use_container_width=True)
 
 
