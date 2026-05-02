@@ -1104,7 +1104,14 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
 
     d = df_on[df_on["Commodity"] == comm]
     if d.empty:
-        st.info(f"No data in selected range.")
+        st.info("No data in selected range.")
+        return
+
+    # London contracts (RC/LCC) have no old/new crop split in the CFTC report
+    other_check = d[d["Crop"] == "Other"]["Total OI"].dropna()
+    if other_check.empty:
+        st.info(f"The CFTC does not publish an old/new crop split for {COMM_NAMES.get(comm, comm)}. "
+                f"This breakdown is only available for US-exchange contracts (KC, CC, SB, CT).")
         return
 
     old  = d[d["Crop"] == "Old"].sort_values("Date")
