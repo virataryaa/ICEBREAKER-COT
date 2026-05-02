@@ -1111,7 +1111,8 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
     other_check = d[d["Crop"] == "Other"]["Total OI"].dropna()
     if other_check.empty:
         st.info(f"The CFTC does not publish an old/new crop split for {COMM_NAMES.get(comm, comm)}. "
-                f"This breakdown is only available for US-exchange contracts (KC, CC, SB, CT).")
+                f"This breakdown is only available for CIT-report commodities (KC, CC, SB, CT). "
+                f"Disaggregated contracts (RC, LCC) are not split by crop year in the CFTC report.")
         return
 
     old  = d[d["Crop"] == "Old"].sort_values("Date")
