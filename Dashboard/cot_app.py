@@ -1110,9 +1110,7 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
     # London contracts (RC/LCC) have no old/new crop split in the CFTC report
     other_check = d[d["Crop"] == "Other"]["Total OI"].dropna()
     if other_check.empty:
-        st.info(f"The CFTC does not publish an old/new crop split for {COMM_NAMES.get(comm, comm)}. "
-                f"This breakdown is only available for CIT-report commodities (KC, CC, SB, CT). "
-                f"Disaggregated contracts (RC, LCC) are not split by crop year in the CFTC report.")
+        st.info("Module under construction.")
         return
 
     old  = d[d["Crop"] == "Old"].sort_values("Date")
