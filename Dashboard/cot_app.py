@@ -1110,7 +1110,7 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
     # London contracts (RC/LCC) have no old/new crop split in the CFTC report
     other_check = d[d["Crop"] == "Other"]["Total OI"].dropna()
     if other_check.empty:
-        st.info("Module under construction.")
+        st.info("Module under construction for RC and LCC.")
         return
 
     old  = d[d["Crop"] == "Old"].sort_values("Date")
