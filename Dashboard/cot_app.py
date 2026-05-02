@@ -982,12 +982,33 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
         st.warning("cot_oldnew.parquet not found — run cot_oldnew.py first.")
         return
 
+    df_seas = df_on_full if df_on_full is not None else df_on
+
+    # ── Tab-level date slider ─────────────────────────────────────────────────
+    comm_data = df_on_full[df_on_full["Commodity"] == comm] if df_on_full is not None else df_on[df_on["Commodity"] == comm]
+    if comm_data.empty:
+        st.info(f"No old/new crop data for {comm}.")
+        return
+    tab_min = comm_data["Date"].min().date()
+    tab_max = comm_data["Date"].max().date()
+    tab_def = max(tab_min, (comm_data["Date"].max() - pd.DateOffset(years=3)).date())
+
+    tab_range = st.slider(
+        "Date range",
+        min_value=tab_min, max_value=tab_max,
+        value=(tab_def, tab_max),
+        format="MMM YYYY",
+        key=f"on_slider_{comm}",
+    )
+    df_on = df_on_full[
+        (df_on_full["Date"] >= pd.Timestamp(tab_range[0])) &
+        (df_on_full["Date"] <= pd.Timestamp(tab_range[1]))
+    ] if df_on_full is not None else df_on
+
     d = df_on[df_on["Commodity"] == comm]
     if d.empty:
-        st.info(f"No old/new crop data for {comm} in selected range.")
+        st.info(f"No data in selected range.")
         return
-
-    df_seas = df_on_full if df_on_full is not None else df_on
 
     old  = d[d["Crop"] == "Old"].sort_values("Date")
     other = d[d["Crop"] == "Other"].sort_values("Date")
