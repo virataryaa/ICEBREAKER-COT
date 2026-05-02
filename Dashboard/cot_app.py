@@ -878,7 +878,106 @@ def stacked_leg_chart(df_on: pd.DataFrame, comm: str, col: str, title: str) -> g
     return fig
 
 
-def render_oldnew(df_on: pd.DataFrame, comm: str):
+def _seasonal_wide(df_on: pd.DataFrame, comm: str) -> pd.DataFrame:
+    """Build a wide per-date DataFrame of derived seasonal metrics."""
+    d     = df_on[df_on["Commodity"] == comm]
+    old   = d[d["Crop"] == "Old"].set_index("Date").sort_index()
+    other = d[d["Crop"] == "Other"].set_index("Date").sort_index()
+
+    common = old.index.intersection(other.index)
+    old, other = old.loc[common], other.loc[common]
+
+    wide = pd.DataFrame(index=common)
+    wide["MM Net Old"]      = old["MM Net"]
+    wide["MM Net New"]      = other["MM Net"]
+    wide["MM Diff"]         = wide["MM Net Old"] - wide["MM Net New"]
+    wide["Comm Short New"]  = other["Prod Short"]
+    oi_sum = old["Total OI"] + other["Total OI"]
+    wide["OI Old %"]        = old["Total OI"] / oi_sum * 100
+    wide["Week"]            = wide.index.isocalendar().week.astype(int)
+    wide["Year"]            = wide.index.year
+    return wide.reset_index()
+
+
+MONTH_TICKS = {1:"Jan", 5:"Feb", 9:"Mar", 14:"Apr", 18:"May", 23:"Jun",
+               27:"Jul", 32:"Aug", 36:"Sep", 40:"Oct", 45:"Nov", 49:"Dec"}
+
+
+def seasonality_chart(df_on: pd.DataFrame, comm: str,
+                      metric: str, title: str, ylabel: str = "") -> go.Figure:
+    wide = _seasonal_wide(df_on, comm)
+    if wide.empty or metric not in wide.columns:
+        return go.Figure().update_layout(**_BASE, height=340)
+
+    pivot = wide.pivot_table(index="Week", columns="Year", values=metric, aggfunc="mean")
+    pivot = pivot[pivot.index <= 52]  # drop week 53 edge case
+
+    cur_year  = int(wide["Year"].max())
+    hist_cols = [c for c in pivot.columns if c < cur_year]
+    hist      = pivot[hist_cols]
+
+    p25    = hist.quantile(0.25, axis=1)
+    p75    = hist.quantile(0.75, axis=1)
+    median = hist.median(axis=1)
+
+    r, g, b = int(ACCENT[1:3], 16), int(ACCENT[3:5], 16), int(ACCENT[5:7], 16)
+    fig = go.Figure()
+
+    # Historical faint lines
+    for yr in hist_cols:
+        fig.add_trace(go.Scatter(
+            x=pivot.index, y=hist[yr], mode="lines",
+            line=dict(color="rgba(150,150,150,0.18)", width=1),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # Percentile band
+    xs = list(p75.index) + list(p75.index[::-1])
+    ys = list(p75.values) + list(p25.values[::-1])
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, fill="toself",
+        fillcolor=f"rgba({r},{g},{b},0.10)",
+        line=dict(width=0), name="25–75th pct",
+        hoverinfo="skip",
+    ))
+
+    # Median
+    fig.add_trace(go.Scatter(
+        x=median.index, y=median.values, mode="lines",
+        name="Median",
+        line=dict(color=f"rgba({r},{g},{b},0.55)", width=1.6, dash="dash"),
+        hovertemplate="Wk %{x}  Median: %{y:.1f}<extra></extra>",
+    ))
+
+    # Current year
+    if cur_year in pivot.columns:
+        cy = pivot[cur_year].dropna()
+        fig.add_trace(go.Scatter(
+            x=cy.index, y=cy.values, mode="lines+markers",
+            name=str(cur_year),
+            line=dict(color=ACCENT, width=2.6),
+            marker=dict(size=5, color=ACCENT),
+            hovertemplate=f"Wk %{{x}}  {cur_year}: %{{y:.1f}}<extra></extra>",
+        ))
+
+    fig.add_hline(y=0, line_width=1, line_color="rgba(0,0,0,0.12)")
+
+    fig.update_layout(
+        **_BASE, height=340,
+        title=dict(text=title, font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=20, t=40, b=60),
+        legend=dict(orientation="h", y=-0.18, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), title_text="",
+                   tickvals=list(MONTH_TICKS.keys()),
+                   ticktext=list(MONTH_TICKS.values())),
+        yaxis=dict(**_ax(), title_text=ylabel or metric, title_font_size=10),
+    )
+    return fig
+
+
+def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = None):
+    """df_on = date-filtered for charts; df_on_full = unfiltered for seasonality."""
     if df_on.empty:
         st.warning("cot_oldnew.parquet not found — run cot_oldnew.py first.")
         return
@@ -887,6 +986,8 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
     if d.empty:
         st.info(f"No old/new crop data for {comm} in selected range.")
         return
+
+    df_seas = df_on_full if df_on_full is not None else df_on
 
     old  = d[d["Crop"] == "Old"].sort_values("Date")
     other = d[d["Crop"] == "Other"].sort_values("Date")
@@ -1022,6 +1123,38 @@ def render_oldnew(df_on: pd.DataFrame, comm: str):
             with c2:
                 st.plotly_chart(stacked_leg_chart(df_on, comm, col, title), use_container_width=True)
 
+    # ── Seasonality ───────────────────────────────────────────────────────────
+    with st.expander("Seasonality — Old vs New Crop", expanded=False):
+        st.markdown(
+            f"<p style='font-size:.75rem;color:{GRAY};margin-bottom:10px'>"
+            f"Faint lines = each historical year · Shaded band = 25th–75th pct · "
+            f"Dashed = median · Bold = {int(df_seas['Date'].dt.year.max()) if not df_seas.empty else 'current'}</p>",
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(seasonality_chart(
+                df_seas, comm, "OI Old %",
+                "OI Old Crop % of Total", ylabel="%"
+            ), use_container_width=True)
+        with c2:
+            st.plotly_chart(seasonality_chart(
+                df_seas, comm, "MM Net Old",
+                "MM Net — Old Crop  ·  k lots", ylabel="k lots"
+            ), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(seasonality_chart(
+                df_seas, comm, "Comm Short New",
+                "Comm Short — New Crop (Forward Selling)  ·  k lots", ylabel="k lots"
+            ), use_container_width=True)
+        with c2:
+            st.plotly_chart(seasonality_chart(
+                df_seas, comm, "MM Diff",
+                "MM Net Old minus New Crop  ·  k lots", ylabel="k lots"
+            ), use_container_width=True)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
@@ -1095,7 +1228,7 @@ def main():
 
     with tab_crop:
         on_f = df_on[df_on["Date"] >= d_start] if not df_on.empty else df_on
-        render_oldnew(on_f, comm)
+        render_oldnew(on_f, comm, df_on_full=df_on)
 
     with tab_cross:
         idx_label = "Index included" if include_idx else "Index excluded"
