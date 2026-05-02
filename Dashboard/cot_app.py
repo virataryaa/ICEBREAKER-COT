@@ -1253,8 +1253,63 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
             with c2:
                 st.plotly_chart(stacked_leg_chart(df_on, comm, col, title), use_container_width=True)
 
-    # ── Seasonality ───────────────────────────────────────────────────────────
-    with st.expander("Seasonality — Old vs New Crop", expanded=False):
+    # ── Crop year seasonality (top) ───────────────────────────────────────────
+    with st.expander("Seasonality : Crop Year ( Adjustable Crop Year )", expanded=False):
+        sm = st.selectbox(
+            "Crop year starts in",
+            options=list(range(1, 13)),
+            index=CROP_START_MONTH - 1,
+            format_func=lambda m: _MONTHS[m - 1],
+            key=f"cy_start_{comm}",
+        )
+        cur_cy = _current_crop_year_label(sm)
+        st.markdown(
+            f"<p style='font-size:.75rem;color:#6e6e73;margin-bottom:10px'>"
+            f"Each line = one crop year · "
+            f"Bold <span style='color:{C_OLD}'>{cur_cy}</span> = current crop year</p>",
+            unsafe_allow_html=True,
+        )
+        def _cy(metric, title, ylabel="k lots"):
+            return cropyr_seasonality_chart(df_seas, comm, metric, title, ylabel=ylabel, start_month=sm)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("OI Old %", "OI Old Crop % of Total — Crop Year", ylabel="%"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("MM Diff", "MM Net Old minus New Crop  ·  Crop Year"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("MM Net Old", "MM Net — Old Crop  ·  Crop Year"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("MM Net New", "MM Net — New Crop  ·  Crop Year"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("MM Long Old", "MM Long — Old Crop  ·  Crop Year"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("MM Long New", "MM Long — New Crop  ·  Crop Year"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("MM Short Old", "MM Short — Old Crop  ·  Crop Year"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("MM Short New", "MM Short — New Crop  ·  Crop Year"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("Comm Net Old", "Comm Net — Old Crop  ·  Crop Year"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("Comm Net New", "Comm Net — New Crop  ·  Crop Year"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("Comm Short Old", "Comm Short — Old Crop  ·  Crop Year"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("Comm Short New", "Comm Short — New Crop (Fwd Selling)  ·  Crop Year"), use_container_width=True)
+
+    # ── Calendar year seasonality ─────────────────────────────────────────────
+    with st.expander("Seasonality : Calendar Year", expanded=False):
         st.markdown(
             f"<p style='font-size:.75rem;color:{GRAY};margin-bottom:10px'>"
             f"Faint lines = each historical year · Shaded band = 25th–75th pct · "
@@ -1308,61 +1363,6 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
         with c2:
             st.plotly_chart(seasonality_chart(df_seas, comm, "Comm Short New",
                 "Comm Short — New Crop (Forward Selling)  ·  k lots", ylabel="k lots"), use_container_width=True)
-
-    # ── Crop year seasonality ─────────────────────────────────────────────────
-    with st.expander("Seasonality — Crop Year", expanded=False):
-        sm = st.selectbox(
-            "Crop year starts in",
-            options=list(range(1, 13)),
-            index=CROP_START_MONTH - 1,
-            format_func=lambda m: _MONTHS[m - 1],
-            key=f"cy_start_{comm}",
-        )
-        cur_cy = _current_crop_year_label(sm)
-        st.markdown(
-            f"<p style='font-size:.75rem;color:#6e6e73;margin-bottom:10px'>"
-            f"Each line = one crop year · "
-            f"Bold <span style='color:{C_OLD}'>{cur_cy}</span> = current crop year</p>",
-            unsafe_allow_html=True,
-        )
-        def _cy(metric, title, ylabel="k lots"):
-            return cropyr_seasonality_chart(df_seas, comm, metric, title, ylabel=ylabel, start_month=sm)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(_cy("OI Old %", "OI Old Crop % of Total — Crop Year", ylabel="%"), use_container_width=True)
-        with c2:
-            st.plotly_chart(_cy("MM Diff", "MM Net Old minus New Crop  ·  Crop Year"), use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(_cy("MM Net Old", "MM Net — Old Crop  ·  Crop Year"), use_container_width=True)
-        with c2:
-            st.plotly_chart(_cy("MM Net New", "MM Net — New Crop  ·  Crop Year"), use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(_cy("MM Long Old", "MM Long — Old Crop  ·  Crop Year"), use_container_width=True)
-        with c2:
-            st.plotly_chart(_cy("MM Long New", "MM Long — New Crop  ·  Crop Year"), use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(_cy("MM Short Old", "MM Short — Old Crop  ·  Crop Year"), use_container_width=True)
-        with c2:
-            st.plotly_chart(_cy("MM Short New", "MM Short — New Crop  ·  Crop Year"), use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(_cy("Comm Net Old", "Comm Net — Old Crop  ·  Crop Year"), use_container_width=True)
-        with c2:
-            st.plotly_chart(_cy("Comm Net New", "Comm Net — New Crop  ·  Crop Year"), use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(_cy("Comm Short Old", "Comm Short — Old Crop  ·  Crop Year"), use_container_width=True)
-        with c2:
-            st.plotly_chart(_cy("Comm Short New", "Comm Short — New Crop (Fwd Selling)  ·  Crop Year"), use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
