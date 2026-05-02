@@ -1088,7 +1088,7 @@ def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
         xaxis=dict(**_ax(x=True),
                    tickvals=list(CROP_WEEK_TICKS.keys()),
                    ticktext=list(CROP_WEEK_TICKS.values()),
-                   title_text="Crop Year (Sep → Aug)"),
+                   title_text=""),
         yaxis=dict(**_ax(), title_text=ylabel or metric, title_font_size=10),
     )
     return fig
