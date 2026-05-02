@@ -983,7 +983,8 @@ def seasonality_chart(df_on: pd.DataFrame, comm: str,
     return fig
 
 
-CROP_START_MONTH = 9  # September — crop year start for KC/CC/RC
+CROP_START_MONTH = 9  # September — default crop year start
+_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
 # Approximate week-within-crop-year where each month label sits
 CROP_WEEK_TICKS = {
@@ -1006,31 +1007,30 @@ def _crop_week_num(date, start_month=CROP_START_MONTH):
     return max(1, (date - crop_start).days // 7 + 1)
 
 
-def _seasonal_wide_cropyr(df_on: pd.DataFrame, comm: str) -> pd.DataFrame:
+def _seasonal_wide_cropyr(df_on: pd.DataFrame, comm: str, start_month: int = CROP_START_MONTH) -> pd.DataFrame:
     wide = _seasonal_wide(df_on, comm)
     if wide.empty:
         return wide
-    wide["CropYear"] = wide["Date"].apply(_crop_year_label)
-    wide["CropWeek"] = wide["Date"].apply(_crop_week_num)
+    wide["CropYear"] = wide["Date"].apply(lambda d: _crop_year_label(d, start_month))
+    wide["CropWeek"] = wide["Date"].apply(lambda d: _crop_week_num(d, start_month))
     return wide
 
 
-def _current_crop_year_label():
-    today = pd.Timestamp.now()
-    return _crop_year_label(today)
+def _current_crop_year_label(start_month: int = CROP_START_MONTH):
+    return _crop_year_label(pd.Timestamp.now(), start_month)
 
 
 def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
-                              metric: str, title: str, ylabel: str = "") -> go.Figure:
-    wide = _seasonal_wide_cropyr(df_on, comm)
+                              metric: str, title: str, ylabel: str = "",
+                              start_month: int = CROP_START_MONTH) -> go.Figure:
+    wide = _seasonal_wide_cropyr(df_on, comm, start_month)
     if wide.empty or metric not in wide.columns:
         return go.Figure().update_layout(**_BASE, height=340)
-
     pivot = wide.pivot_table(index="CropWeek", columns="CropYear",
                              values=metric, aggfunc="mean")
     pivot = pivot[pivot.index <= 52]
 
-    cur_label  = _current_crop_year_label()
+    cur_label  = _current_crop_year_label(start_month)
     hist_cols  = [c for c in pivot.columns if c != cur_label]
     hist       = pivot[hist_cols]
 
@@ -1087,7 +1087,7 @@ def cropyr_seasonality_chart(df_on: pd.DataFrame, comm: str,
                     font_size=10, bgcolor="rgba(0,0,0,0)"),
         xaxis=dict(**_ax(x=True),
                    tickvals=list(CROP_WEEK_TICKS.keys()),
-                   ticktext=list(CROP_WEEK_TICKS.values()),
+                   ticktext=[_MONTHS[(start_month - 1 + i) % 12] for i in range(12)],
                    title_text=""),
         yaxis=dict(**_ax(), title_text=ylabel or metric, title_font_size=10),
     )
@@ -1319,61 +1319,59 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
                 "Comm Short — New Crop (Forward Selling)  ·  k lots", ylabel="k lots"), use_container_width=True)
 
     # ── Crop year seasonality ─────────────────────────────────────────────────
-    with st.expander("Seasonality — Crop Year (Sep → Aug)", expanded=False):
-        cur_cy = _current_crop_year_label()
+    with st.expander("Seasonality — Crop Year", expanded=False):
+        sm = st.selectbox(
+            "Crop year starts in",
+            options=list(range(1, 13)),
+            index=CROP_START_MONTH - 1,
+            format_func=lambda m: _MONTHS[m - 1],
+            key=f"cy_start_{comm}",
+        )
+        cur_cy = _current_crop_year_label(sm)
         st.markdown(
-            f"<p style='font-size:.75rem;color:{GRAY};margin-bottom:10px'>"
-            f"X-axis = crop year (Sep → Aug) · Each line = one crop year · "
+            f"<p style='font-size:.75rem;color:#6e6e73;margin-bottom:10px'>"
+            f"Each line = one crop year · "
             f"Bold <span style='color:{C_OLD}'>{cur_cy}</span> = current crop year</p>",
             unsafe_allow_html=True,
         )
-        c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "OI Old %",
-                "OI Old Crop % of Total — Crop Year", ylabel="%"), use_container_width=True)
-        with c2:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Diff",
-                "MM Net Old minus New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+        def _cy(metric, title, ylabel="k lots"):
+            return cropyr_seasonality_chart(df_seas, comm, metric, title, ylabel=ylabel, start_month=sm)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Net Old",
-                "MM Net — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("OI Old %", "OI Old Crop % of Total — Crop Year", ylabel="%"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Net New",
-                "MM Net — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Diff", "MM Net Old minus New Crop  ·  Crop Year"), use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Long Old",
-                "MM Long — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Net Old", "MM Net — Old Crop  ·  Crop Year"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Long New",
-                "MM Long — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Net New", "MM Net — New Crop  ·  Crop Year"), use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Short Old",
-                "MM Short — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Long Old", "MM Long — Old Crop  ·  Crop Year"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "MM Short New",
-                "MM Short — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Long New", "MM Long — New Crop  ·  Crop Year"), use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Net Old",
-                "Comm Net — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Short Old", "MM Short — Old Crop  ·  Crop Year"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Net New",
-                "Comm Net — New Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("MM Short New", "MM Short — New Crop  ·  Crop Year"), use_container_width=True)
 
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Short Old",
-                "Comm Short — Old Crop  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("Comm Net Old", "Comm Net — Old Crop  ·  Crop Year"), use_container_width=True)
         with c2:
-            st.plotly_chart(cropyr_seasonality_chart(df_seas, comm, "Comm Short New",
-                "Comm Short — New Crop (Forward Selling)  ·  Crop Year", ylabel="k lots"), use_container_width=True)
+            st.plotly_chart(_cy("Comm Net New", "Comm Net — New Crop  ·  Crop Year"), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(_cy("Comm Short Old", "Comm Short — Old Crop  ·  Crop Year"), use_container_width=True)
+        with c2:
+            st.plotly_chart(_cy("Comm Short New", "Comm Short — New Crop (Fwd Selling)  ·  Crop Year"), use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
