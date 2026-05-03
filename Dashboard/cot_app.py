@@ -546,8 +546,17 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
         ),
     ))
     corr_str = f"r(X,Y) = {corr_xy:+.2f}   ·   r(X,Z) = {corr_xz:+.2f}   ·   r(Y,Z) = {corr_yz:+.2f}"
+    def _sax(label):
+        return dict(
+            title=dict(text=label, font=dict(size=10)),
+            tickfont=dict(size=9),
+            gridcolor="rgba(0,0,0,0.08)",
+        )
     fig.update_layout(
-        **_BASE,
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="-apple-system,BlinkMacSystemFont,Helvetica Neue,sans-serif",
+                  color="#2d2d2d", size=11),
         title=dict(
             text=(f"{title}<br>"
                   f"<span style='font-size:10px;color:#888'>{corr_str}</span>"),
@@ -556,12 +565,9 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
         height=height,
         margin=dict(l=0, r=0, t=70, b=0),
         scene=dict(
-            xaxis=dict(title=xlabel, titlefont=dict(size=10), tickfont=dict(size=9),
-                       backgroundcolor="rgba(248,248,252,0.6)", gridcolor="rgba(0,0,0,0.08)"),
-            yaxis=dict(title=ylabel, titlefont=dict(size=10), tickfont=dict(size=9),
-                       backgroundcolor="rgba(248,248,252,0.6)", gridcolor="rgba(0,0,0,0.08)"),
-            zaxis=dict(title=zlabel, titlefont=dict(size=10), tickfont=dict(size=9),
-                       backgroundcolor="rgba(248,248,252,0.6)", gridcolor="rgba(0,0,0,0.08)"),
+            xaxis=_sax(xlabel),
+            yaxis=_sax(ylabel),
+            zaxis=_sax(zlabel),
         ),
     )
     return fig
