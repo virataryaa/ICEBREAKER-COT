@@ -707,8 +707,6 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
             ("Spec %",     f"{latest['Spec Participation']*100:.1f}%" if pd.notna(latest["Spec Participation"]) else "—", ""),
             ("Comm %",     f"{latest['Comm Participation']*100:.1f}%" if pd.notna(latest["Comm Participation"]) else "—", ""),
         ]
-    kpi_row(kpi_items, comm)
-
     if is_cit:
         cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
                     "Spec Long", "Spec Short", "Comm Long", "Comm Short",
@@ -724,6 +722,7 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
     tab_ov, tab_sc = st.tabs(["Overview", "Scatter (2D/3D)"])
 
     with tab_ov:
+        kpi_row(kpi_items, comm)
         with st.expander(f"{comm} — Weekly Data  (k lots)", expanded=False):
             if is_cit:
                 tbl_cols   = ["Date", sc, "Spec Long", "Spec Short",
