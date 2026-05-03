@@ -501,6 +501,102 @@ def position_vs_price_scatter(df: pd.DataFrame, comm: str, y_col: str) -> go.Fig
     )
 
 
+def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height=520) -> go.Figure:
+    x     = np.asarray(x, dtype=float)
+    y     = np.asarray(y, dtype=float)
+    z     = np.asarray(z, dtype=float)
+    dates = np.asarray(dates, dtype="datetime64[ns]")
+    mask  = ~(np.isnan(x) | np.isnan(y) | np.isnan(z))
+    x, y, z, dates = x[mask], y[mask], z[mask], dates[mask]
+    if len(x) < 5:
+        return go.Figure().update_layout(
+            **_BASE, title=dict(text=title + "  [insufficient data]", font_size=12), height=height)
+
+    corr_xy = float(np.corrcoef(x, y)[0, 1])
+    corr_xz = float(np.corrcoef(x, z)[0, 1])
+    corr_yz = float(np.corrcoef(y, z)[0, 1])
+
+    recency  = (dates - dates.min()).astype("timedelta64[D]").astype(float)
+    norm_rec = recency / recency.max() if recency.max() > 0 else recency
+    r, g, b  = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter3d(
+        x=x, y=y, z=z, mode="markers",
+        marker=dict(
+            color=norm_rec,
+            colorscale=[[0, "rgba(200,210,230,0.4)"], [1, f"rgba({r},{g},{b},0.85)"]],
+            size=5, line=dict(width=0.5, color="white"),
+        ),
+        text=pd.to_datetime(dates).strftime("%Y-%m-%d"),
+        hovertemplate=(
+            "<b>%{text}</b><br>"
+            f"{xlabel}: %{{x:.2f}}<br>"
+            f"{ylabel}: %{{y:.2f}}<br>"
+            f"{zlabel}: %{{z:.2f}}<extra></extra>"
+        ),
+        showlegend=False,
+    ))
+    fig.add_trace(go.Scatter3d(
+        x=[x[-1]], y=[y[-1]], z=[z[-1]], mode="markers", showlegend=False,
+        marker=dict(symbol="diamond", size=10, color=DRED, line=dict(width=1, color="white")),
+        hovertemplate=(
+            f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>"
+            f"{xlabel}: {x[-1]:.2f}<br>{ylabel}: {y[-1]:.2f}<br>{zlabel}: {z[-1]:.2f}<extra></extra>"
+        ),
+    ))
+    corr_str = f"r(X,Y) = {corr_xy:+.2f}   ·   r(X,Z) = {corr_xz:+.2f}   ·   r(Y,Z) = {corr_yz:+.2f}"
+    fig.update_layout(
+        **_BASE,
+        title=dict(
+            text=(f"{title}<br>"
+                  f"<span style='font-size:10px;color:#888'>{corr_str}</span>"),
+            font=dict(size=12, color="#444"), x=0,
+        ),
+        height=height,
+        margin=dict(l=0, r=0, t=70, b=0),
+        scene=dict(
+            xaxis=dict(title=xlabel, titlefont=dict(size=10), tickfont=dict(size=9),
+                       backgroundcolor="rgba(248,248,252,0.6)", gridcolor="rgba(0,0,0,0.08)"),
+            yaxis=dict(title=ylabel, titlefont=dict(size=10), tickfont=dict(size=9),
+                       backgroundcolor="rgba(248,248,252,0.6)", gridcolor="rgba(0,0,0,0.08)"),
+            zaxis=dict(title=zlabel, titlefont=dict(size=10), tickfont=dict(size=9),
+                       backgroundcolor="rgba(248,248,252,0.6)", gridcolor="rgba(0,0,0,0.08)"),
+        ),
+    )
+    return fig
+
+
+def px_chg_vs_cot_scatter_3d(df: pd.DataFrame, comm: str, y_col: str, z_col: str) -> go.Figure:
+    d = df[df["Commodity"] == comm].sort_values("Date")
+    return _scatter3d_base(
+        x=d["Px"].pct_change().values * 100,
+        y=d[y_col].diff().values,
+        z=d[z_col].diff().values,
+        dates=d["Date"].values,
+        color=ACCENT,
+        title=f"Price Chg %  ×  {y_col} Δ  ×  {z_col} Δ",
+        xlabel="Price % chg",
+        ylabel=f"{y_col} Δ (k lots)",
+        zlabel=f"{z_col} Δ (k lots)",
+    )
+
+
+def position_vs_price_scatter_3d(df: pd.DataFrame, comm: str, y_col: str, z_col: str) -> go.Figure:
+    d = df[df["Commodity"] == comm].sort_values("Date").dropna(subset=["Px"])
+    return _scatter3d_base(
+        x=d["Px"].values,
+        y=d[y_col].values,
+        z=d[z_col].values,
+        dates=d["Date"].values,
+        color=ACCENT,
+        title=f"Price  ×  {y_col}  ×  {z_col}",
+        xlabel="Price",
+        ylabel=f"{y_col} (k lots)",
+        zlabel=f"{z_col} (k lots)",
+    )
+
+
 def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool,
                    include_idx: bool = True) -> go.Figure:
     sc          = spec_col(is_cit, include_idx)
@@ -713,6 +809,46 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
     with st.expander(f"{comm} — Scatter: Net / Gross Long vs Price", expanded=False):
         sel_y = st.selectbox("Position (Y-axis)", pos_opts, key=f"pos_px_{comm}")
         st.plotly_chart(position_vs_price_scatter(df, comm, sel_y), use_container_width=True)
+
+    with st.expander(f"{comm} — 3D Scatter  (Beta Version)", expanded=False):
+        st.markdown(
+            "<p style='font-size:.75rem;color:#6e6e73;margin-bottom:12px'>"
+            "Rotate · zoom · hover freely &nbsp;·&nbsp; gradient = older → newer "
+            "&nbsp;·&nbsp; red diamond = latest observation</p>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            "<p style='font-size:.78rem;font-weight:600;color:#444;margin-bottom:6px'>"
+            "Price Chg % vs COT Element Deltas</p>",
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            y3_chg = st.selectbox("Y-axis COT element", cot_opts,
+                                  index=0, key=f"3d_pxchg_y_{comm}")
+        with c2:
+            z3_chg = st.selectbox("Z-axis COT element", cot_opts,
+                                  index=min(1, len(cot_opts) - 1), key=f"3d_pxchg_z_{comm}")
+        st.plotly_chart(px_chg_vs_cot_scatter_3d(df, comm, y3_chg, z3_chg),
+                        use_container_width=True)
+
+        st.markdown("---")
+
+        st.markdown(
+            "<p style='font-size:.78rem;font-weight:600;color:#444;margin-bottom:6px'>"
+            "Price Level vs Net / Gross Positions</p>",
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            y3_pos = st.selectbox("Y-axis position", pos_opts,
+                                  index=0, key=f"3d_pos_y_{comm}")
+        with c2:
+            z3_pos = st.selectbox("Z-axis position", pos_opts,
+                                  index=min(1, len(pos_opts) - 1), key=f"3d_pos_z_{comm}")
+        st.plotly_chart(position_vs_price_scatter_3d(df, comm, y3_pos, z3_pos),
+                        use_container_width=True)
 
     st.plotly_chart(histogram_trio(df, comm, is_cit, include_idx=include_idx), use_container_width=True)
     st.markdown("---")
