@@ -709,167 +709,166 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         ]
     kpi_row(kpi_items, comm)
 
-    # ── Collapsible merged table: Positions | Weekly Δ ────────────────────
-    with st.expander(f"{comm} — Weekly Data  (k lots)", expanded=False):
-        if is_cit:
-            tbl_cols   = ["Date", sc, "Spec Long", "Spec Short",
-                          "Comm Net", "Comm Long", "Comm Short", "Index Net"]
-            rename_map = {sc: "Spec Net"}
-        else:
-            tbl_cols   = ["Date", "Spec Net", "MM Long", "MM Short",
-                          "Comm Net", "Comm Long", "Comm Short"]
-            rename_map = {"MM Long": "Spec Long", "MM Short": "Spec Short"}
-
-        base = (d[[c for c in tbl_cols if c in d.columns]]
-                .copy()
-                .rename(columns=rename_map)
-                .sort_values("Date")
-                .reset_index(drop=True))
-
-        rl = load_rollex(comm)
-        if rl is not None:
-            rl_reset          = rl[["rollex_px"]].reset_index()
-            rl_reset.columns  = ["Date", "Rollex"]
-            rv                = _align_to_cot(base["Date"], rl_reset, "Date", "Rollex")
-            base["Rollex"]    = rv
-            base["Rollex %Δ"] = (pd.Series(rv).pct_change() * 100).values
-            base              = base.drop(columns=["Rollex"])
-
-        num_cols = [c for c in base.columns if c not in ("Date", "Rollex %Δ")]
-
-        chg = base.copy()
-        for nc in num_cols:
-            chg[nc] = chg[nc].diff()
-
-        base = base.sort_values("Date", ascending=False).reset_index(drop=True)
-        chg  = chg.sort_values("Date",  ascending=False).reset_index(drop=True)
-        date_str = pd.to_datetime(base["Date"]).dt.strftime("%d %b '%y")
-
-        val_cols = [c for c in base.columns if c != "Date"]
-
-        # Single MultiIndex DataFrame: Date | Positions … | Weekly Δ …
-        date_df = pd.DataFrame({("", "Date"): date_str.values})
-        pos_df  = base[val_cols].copy()
-        chg_df  = chg[val_cols].copy()
-        pos_df.columns = pd.MultiIndex.from_tuples([("Positions", c) for c in val_cols])
-        chg_df.columns = pd.MultiIndex.from_tuples([("Weekly Δ",  c) for c in val_cols])
-        combined = pd.concat([date_df, pos_df, chg_df], axis=1)
-
-        fmt = {}
-        for c in val_cols:
-            fmt[("Positions", c)] = "{:+.2f}%" if c == "Rollex %Δ" else "{:.1f}"
-            fmt[("Weekly Δ",  c)] = "{:+.2f}%" if c == "Rollex %Δ" else "{:+.1f}"
-
-        def _style_tbl(df):
-            out = pd.DataFrame("", index=df.index, columns=df.columns)
-            for col in df.columns:
-                if not isinstance(col, tuple) or col[0] == "":
-                    continue
-                group, sub = col
-                for i in df.index:
-                    raw = df.at[i, col]
-                    if isinstance(raw, str):
-                        continue
-                    try:
-                        v = float(raw)
-                        if np.isnan(v):
-                            continue
-                    except (TypeError, ValueError):
-                        continue
-                    clr = "#16a34a" if v > 0 else "#dc2626" if v < 0 else "#888"
-                    if group == "Weekly Δ" or "Net" in sub or sub == "Rollex %Δ":
-                        out.at[i, col] = f"color:{clr}"
-            return out
-
-        styled = (combined.style
-                          .format(fmt, na_rep="—")
-                          .apply(_style_tbl, axis=None)
-                          .hide(axis="index")
-                          .set_table_styles([
-                              {"selector": "thead tr:first-child th",
-                               "props": [("text-align", "center"),
-                                         ("font-weight", "600"),
-                                         ("font-size", "0.78rem"),
-                                         ("color", "#444")]},
-                          ]))
-        st.dataframe(styled, use_container_width=True, height=420)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
-    with c2:
-        st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=False, include_idx=include_idx), use_container_width=True)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
-    with c2:
-        st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=False, include_idx=include_idx), use_container_width=True)
-
     if is_cit:
         cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
                     "Spec Long", "Spec Short", "Comm Long", "Comm Short",
                     "Spec Participation", "Comm Participation"]
-    else:
-        cot_opts = ["MM Net", "Comm Net", "Swap Net", "Others Net", "Non Rep Net", "Spec Net",
-                    "MM Long", "MM Short", "Comm Long", "Comm Short", "Swap Long", "Swap Short", "Spec Participation"]
-
-    with st.expander(f"{comm} — Scatter: Price Chg % vs COT Element Δ", expanded=False):
-        sel_x = st.selectbox("COT element (X-axis)", cot_opts, key=f"px_cot_{comm}")
-        st.plotly_chart(px_chg_vs_cot_scatter(df, comm, sel_x), use_container_width=True)
-
-    if is_cit:
         pos_opts = [sc, "Comm Net", "Spec Long", "Comm Long",
                     "Spec Short", "Comm Short", "Index Net", "Non Rep Net"]
     else:
+        cot_opts = ["MM Net", "Comm Net", "Swap Net", "Others Net", "Non Rep Net", "Spec Net",
+                    "MM Long", "MM Short", "Comm Long", "Comm Short", "Swap Long", "Swap Short", "Spec Participation"]
         pos_opts = ["MM Net", "Comm Net", "Swap Net", "Others Net", "Spec Net",
                     "MM Long", "MM Short", "Comm Long", "Comm Short", "Swap Long", "Swap Short", "Non Rep Net"]
 
-    with st.expander(f"{comm} — Scatter: Net / Gross Long vs Price", expanded=False):
-        sel_y = st.selectbox("Position (Y-axis)", pos_opts, key=f"pos_px_{comm}")
-        st.plotly_chart(position_vs_price_scatter(df, comm, sel_y), use_container_width=True)
+    tab_ov, tab_sc = st.tabs(["Overview", "Scatter (2D/3D)"])
 
-    with st.expander(f"{comm} — 3D Scatter  (Beta Version)", expanded=False):
-        st.markdown(
-            "<p style='font-size:.75rem;color:#6e6e73;margin-bottom:12px'>"
-            "Rotate · zoom · hover freely &nbsp;·&nbsp; gradient = older → newer "
-            "&nbsp;·&nbsp; red diamond = latest observation</p>",
-            unsafe_allow_html=True,
-        )
+    with tab_ov:
+        with st.expander(f"{comm} — Weekly Data  (k lots)", expanded=False):
+            if is_cit:
+                tbl_cols   = ["Date", sc, "Spec Long", "Spec Short",
+                              "Comm Net", "Comm Long", "Comm Short", "Index Net"]
+                rename_map = {sc: "Spec Net"}
+            else:
+                tbl_cols   = ["Date", "Spec Net", "MM Long", "MM Short",
+                              "Comm Net", "Comm Long", "Comm Short"]
+                rename_map = {"MM Long": "Spec Long", "MM Short": "Spec Short"}
 
-        st.markdown(
-            "<p style='font-size:.78rem;font-weight:600;color:#444;margin-bottom:6px'>"
-            "Price Chg % vs COT Element Deltas</p>",
-            unsafe_allow_html=True,
-        )
+            base = (d[[c for c in tbl_cols if c in d.columns]]
+                    .copy()
+                    .rename(columns=rename_map)
+                    .sort_values("Date")
+                    .reset_index(drop=True))
+
+            rl = load_rollex(comm)
+            if rl is not None:
+                rl_reset          = rl[["rollex_px"]].reset_index()
+                rl_reset.columns  = ["Date", "Rollex"]
+                rv                = _align_to_cot(base["Date"], rl_reset, "Date", "Rollex")
+                base["Rollex"]    = rv
+                base["Rollex %Δ"] = (pd.Series(rv).pct_change() * 100).values
+                base              = base.drop(columns=["Rollex"])
+
+            num_cols = [c for c in base.columns if c not in ("Date", "Rollex %Δ")]
+
+            chg = base.copy()
+            for nc in num_cols:
+                chg[nc] = chg[nc].diff()
+
+            base = base.sort_values("Date", ascending=False).reset_index(drop=True)
+            chg  = chg.sort_values("Date",  ascending=False).reset_index(drop=True)
+            date_str = pd.to_datetime(base["Date"]).dt.strftime("%d %b '%y")
+
+            val_cols = [c for c in base.columns if c != "Date"]
+
+            date_df = pd.DataFrame({("", "Date"): date_str.values})
+            pos_df  = base[val_cols].copy()
+            chg_df  = chg[val_cols].copy()
+            pos_df.columns = pd.MultiIndex.from_tuples([("Positions", c) for c in val_cols])
+            chg_df.columns = pd.MultiIndex.from_tuples([("Weekly Δ",  c) for c in val_cols])
+            combined = pd.concat([date_df, pos_df, chg_df], axis=1)
+
+            fmt = {}
+            for c in val_cols:
+                fmt[("Positions", c)] = "{:+.2f}%" if c == "Rollex %Δ" else "{:.1f}"
+                fmt[("Weekly Δ",  c)] = "{:+.2f}%" if c == "Rollex %Δ" else "{:+.1f}"
+
+            def _style_tbl(df):
+                out = pd.DataFrame("", index=df.index, columns=df.columns)
+                for col in df.columns:
+                    if not isinstance(col, tuple) or col[0] == "":
+                        continue
+                    group, sub = col
+                    for i in df.index:
+                        raw = df.at[i, col]
+                        if isinstance(raw, str):
+                            continue
+                        try:
+                            v = float(raw)
+                            if np.isnan(v):
+                                continue
+                        except (TypeError, ValueError):
+                            continue
+                        clr = "#16a34a" if v > 0 else "#dc2626" if v < 0 else "#888"
+                        if group == "Weekly Δ" or "Net" in sub or sub == "Rollex %Δ":
+                            out.at[i, col] = f"color:{clr}"
+                return out
+
+            styled = (combined.style
+                              .format(fmt, na_rep="—")
+                              .apply(_style_tbl, axis=None)
+                              .hide(axis="index")
+                              .set_table_styles([
+                                  {"selector": "thead tr:first-child th",
+                                   "props": [("text-align", "center"),
+                                             ("font-weight", "600"),
+                                             ("font-size", "0.78rem"),
+                                             ("color", "#444")]},
+                              ]))
+            st.dataframe(styled, use_container_width=True, height=420)
+
         c1, c2 = st.columns(2)
         with c1:
-            y3_chg = st.selectbox("Y-axis COT element", cot_opts,
-                                  index=0, key=f"3d_pxchg_y_{comm}")
+            st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
         with c2:
-            z3_chg = st.selectbox("Z-axis COT element", cot_opts,
-                                  index=min(1, len(cot_opts) - 1), key=f"3d_pxchg_z_{comm}")
-        st.plotly_chart(px_chg_vs_cot_scatter_3d(df, comm, y3_chg, z3_chg),
-                        use_container_width=True)
+            st.plotly_chart(weekly_change_bars(df, comm, is_cit, spec=False, include_idx=include_idx), use_container_width=True)
 
-        st.markdown("---")
-
-        st.markdown(
-            "<p style='font-size:.78rem;font-weight:600;color:#444;margin-bottom:6px'>"
-            "Price Level vs Net / Gross Positions</p>",
-            unsafe_allow_html=True,
-        )
         c1, c2 = st.columns(2)
         with c1:
-            y3_pos = st.selectbox("Y-axis position", pos_opts,
-                                  index=0, key=f"3d_pos_y_{comm}")
+            st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=True,  include_idx=include_idx), use_container_width=True)
         with c2:
-            z3_pos = st.selectbox("Z-axis position", pos_opts,
-                                  index=min(1, len(pos_opts) - 1), key=f"3d_pos_z_{comm}")
-        st.plotly_chart(position_vs_price_scatter_3d(df, comm, y3_pos, z3_pos),
-                        use_container_width=True)
+            st.plotly_chart(gross_net_lines(df, comm, is_cit, spec=False, include_idx=include_idx), use_container_width=True)
 
-    st.plotly_chart(histogram_trio(df, comm, is_cit, include_idx=include_idx), use_container_width=True)
+        st.plotly_chart(histogram_trio(df, comm, is_cit, include_idx=include_idx), use_container_width=True)
+
+    with tab_sc:
+        with st.expander("Price Chg % vs COT Element Δ", expanded=True):
+            sel_x = st.selectbox("COT element", cot_opts, key=f"px_cot_{comm}")
+            st.plotly_chart(px_chg_vs_cot_scatter(df, comm, sel_x), use_container_width=True)
+
+        with st.expander("Net / Gross Position vs Price", expanded=True):
+            sel_y = st.selectbox("Position", pos_opts, key=f"pos_px_{comm}")
+            st.plotly_chart(position_vs_price_scatter(df, comm, sel_y), use_container_width=True)
+
+        with st.expander("3D Scatter  (Beta Version)", expanded=True):
+            st.markdown(
+                "<p style='font-size:.75rem;color:#6e6e73;margin-bottom:12px'>"
+                "Rotate · zoom · hover freely &nbsp;·&nbsp; gradient = older → newer "
+                "&nbsp;·&nbsp; red diamond = latest observation</p>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                "<p style='font-size:.78rem;font-weight:600;color:#444;margin-bottom:6px'>"
+                "Price Chg % vs COT Element Deltas</p>",
+                unsafe_allow_html=True,
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                y3_chg = st.selectbox("Y-axis COT element", cot_opts,
+                                      index=0, key=f"3d_pxchg_y_{comm}")
+            with c2:
+                z3_chg = st.selectbox("Z-axis COT element", cot_opts,
+                                      index=min(1, len(cot_opts) - 1), key=f"3d_pxchg_z_{comm}")
+            st.plotly_chart(px_chg_vs_cot_scatter_3d(df, comm, y3_chg, z3_chg),
+                            use_container_width=True)
+
+            st.markdown("---")
+
+            st.markdown(
+                "<p style='font-size:.78rem;font-weight:600;color:#444;margin-bottom:6px'>"
+                "Price Level vs Net / Gross Positions</p>",
+                unsafe_allow_html=True,
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                y3_pos = st.selectbox("Y-axis position", pos_opts,
+                                      index=0, key=f"3d_pos_y_{comm}")
+            with c2:
+                z3_pos = st.selectbox("Z-axis position", pos_opts,
+                                      index=min(1, len(pos_opts) - 1), key=f"3d_pos_z_{comm}")
+            st.plotly_chart(position_vs_price_scatter_3d(df, comm, y3_pos, z3_pos),
+                            use_container_width=True)
+
     st.markdown("---")
 
 
