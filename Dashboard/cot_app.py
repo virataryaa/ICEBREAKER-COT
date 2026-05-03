@@ -525,8 +525,8 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
         x=x, y=y, z=z, mode="markers",
         marker=dict(
             color=norm_rec,
-            colorscale=[[0, "rgba(200,210,230,0.4)"], [1, f"rgba({r},{g},{b},0.85)"]],
-            size=5, line=dict(width=0.5, color="white"),
+            colorscale=[[0, "rgba(200,210,230,0.5)"], [1, f"rgba({r},{g},{b},0.9)"]],
+            size=7, line=dict(width=0.8, color="white"),
         ),
         text=pd.to_datetime(dates).strftime("%Y-%m-%d"),
         hovertemplate=(
@@ -539,19 +539,26 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
     ))
     fig.add_trace(go.Scatter3d(
         x=[x[-1]], y=[y[-1]], z=[z[-1]], mode="markers", showlegend=False,
-        marker=dict(symbol="diamond", size=10, color=DRED, line=dict(width=1, color="white")),
+        marker=dict(symbol="diamond", size=12, color=DRED, line=dict(width=1.5, color="white")),
         hovertemplate=(
             f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>"
             f"{xlabel}: {x[-1]:.2f}<br>{ylabel}: {y[-1]:.2f}<br>{zlabel}: {z[-1]:.2f}<extra></extra>"
         ),
     ))
     corr_str = f"r(X,Y) = {corr_xy:+.2f}   ·   r(X,Z) = {corr_xz:+.2f}   ·   r(Y,Z) = {corr_yz:+.2f}"
-    def _sax(label):
+
+    def _sax(label, bg):
         return dict(
-            title=dict(text=label, font=dict(size=10)),
-            tickfont=dict(size=9),
-            gridcolor="rgba(0,0,0,0.08)",
+            title=dict(text=label, font=dict(size=10, color="#555")),
+            tickfont=dict(size=9, color="#777"),
+            gridcolor="rgba(0,0,0,0.10)",
+            gridwidth=1,
+            showbackground=True,
+            backgroundcolor=bg,
+            zerolinecolor="rgba(0,0,0,0.20)",
+            zerolinewidth=2,
         )
+
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
@@ -563,11 +570,17 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
             font=dict(size=12, color="#444"), x=0,
         ),
         height=height,
-        margin=dict(l=0, r=0, t=70, b=0),
+        margin=dict(l=0, r=0, t=70, b=20),
         scene=dict(
-            xaxis=_sax(xlabel),
-            yaxis=_sax(ylabel),
-            zaxis=_sax(zlabel),
+            aspectmode="cube",
+            camera=dict(
+                up=dict(x=0, y=0, z=1),
+                center=dict(x=0, y=0, z=-0.1),
+                eye=dict(x=1.6, y=1.6, z=0.8),
+            ),
+            xaxis=_sax(xlabel, "rgba(240,244,255,0.6)"),
+            yaxis=_sax(ylabel, "rgba(240,255,244,0.6)"),
+            zaxis=_sax(zlabel, "rgba(255,248,240,0.6)"),
         ),
     )
     return fig
