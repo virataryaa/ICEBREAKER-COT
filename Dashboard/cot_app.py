@@ -188,21 +188,23 @@ def build_combined_cocoa(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.Da
     out = pd.DataFrame()
     out["Date"]      = m["Date"]
     out["Commodity"] = "CC+LCC"
+    # Columns in BOTH datasets get _cc/_lcc suffix; columns unique to one side keep original name
     out["Total OI"]  = m["Total OI_cc"]   + m["Total OI_lcc"]
     out["Comm Long"] = m["Comm Long_cc"]  + m["Comm Long_lcc"]
     out["Comm Short"]= m["Comm Short_cc"] + m["Comm Short_lcc"]
     out["Comm Net"]  = m["Comm Net_cc"]   + m["Comm Net_lcc"]
-    # Spec: CIT Spec ≈ Disagg MM; Index ≈ Swap
-    out["Spec Long"]  = m["Spec Long_cc"]  + m["MM Long_lcc"]
-    out["Spec Short"] = m["Spec Short_cc"] + m["MM Short_lcc"]
+    # Spec Long/Short only in CIT → no suffix; MM Long/Short only in Disagg → no suffix
+    out["Spec Long"]  = m["Spec Long"]  + m["MM Long"]
+    out["Spec Short"] = m["Spec Short"] + m["MM Short"]
     out["Non Rep Long"]  = m["Non Rep Long_cc"]  + m["Non Rep Long_lcc"]
     out["Non Rep Short"] = m["Non Rep Short_cc"] + m["Non Rep Short_lcc"]
     out["Non Rep Net"]   = out["Non Rep Long"] - out["Non Rep Short"]
     out["Spec Net"]      = (out["Spec Long"] - out["Spec Short"]
                             + out["Non Rep Long"] - out["Non Rep Short"])
-    out["Index Long"]  = m["Index Long_cc"]  + m["Swap Long_lcc"]
-    out["Index Short"] = m["Index Short_cc"] + m["Swap Short_lcc"]
-    out["Index Net"]   = m["Index Net_cc"]   + m["Swap Net_lcc"]
+    # Index only in CIT → no suffix; Swap only in Disagg → no suffix
+    out["Index Long"]  = m["Index Long"]  + m["Swap Long"]
+    out["Index Short"] = m["Index Short"] + m["Swap Short"]
+    out["Index Net"]   = m["Index Net"]   + m["Swap Net"]
     out["Spec Net (Idx inc.)"] = out["Spec Net"] + out["Index Net"]
     out["Px"] = m["Px_cc"]  # CC price as reference
 
