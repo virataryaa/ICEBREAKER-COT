@@ -121,9 +121,15 @@ def load_cit() -> pd.DataFrame:
     df["Spec Net (Idx inc.)"] = df["Spec Net"] + df["Index Long"] - df["Index Short"]
     df["Index Net"]           = df["Index Long"]  - df["Index Short"]
     df["Non Rep Net"]         = df["Non Rep Long"] - df["Non Rep Short"]
-    df["Comm Participation"]  = (df["Comm Long"] + df["Comm Short"]) / df["Total OI"]
-    df["Spec Participation"]  = (df["Spec Long"] + df["Spec Short"]
-                                 + df["Non Rep Long"] + df["Non Rep Short"]) / df["Total OI"]
+    oi2 = df["Total OI"] * 2
+    df["Comm Gross %"] = (df["Comm Long"] + df["Comm Short"]) / oi2
+    df["Comm Long %"]  = df["Comm Long"] / df["Total OI"]
+    df["Spec Gross %"] = (df["Spec Long"] + df["Spec Short"]
+                          + df["Non Rep Long"] + df["Non Rep Short"]) / oi2
+    df["Spec Long %"]  = (df["Spec Long"] + df["Non Rep Long"]) / df["Total OI"]
+    # keep old names as aliases so nothing else breaks
+    df["Comm Participation"] = df["Comm Gross %"]
+    df["Spec Participation"] = df["Spec Gross %"]
     return df.sort_values(["Commodity", "Date"]).reset_index(drop=True)
 
 
@@ -141,12 +147,15 @@ def load_disagg() -> pd.DataFrame:
     df["Non Rep Net"]        = df["Non Rep Long"] - df["Non Rep Short"]
     # Broad spec = MM + Other + Non Rep
     df["Spec Net"]           = df["MM Net"] + df["Others Net"] + df["Non Rep Net"]
-    df["Spec Participation"] = (
-        df["MM Long"] + df["MM Short"] +
-        df["Other Long"] + df["Other Short"] +
-        df["Non Rep Long"] + df["Non Rep Short"]
-    ) / df["Total OI"]
-    df["Comm Participation"] = (df["Comm Long"] + df["Comm Short"]) / df["Total OI"]
+    oi2 = df["Total OI"] * 2
+    df["Comm Gross %"] = (df["Comm Long"] + df["Comm Short"]) / oi2
+    df["Comm Long %"]  = df["Comm Long"] / df["Total OI"]
+    df["Spec Gross %"] = (df["MM Long"] + df["MM Short"] +
+                          df["Other Long"] + df["Other Short"] +
+                          df["Non Rep Long"] + df["Non Rep Short"]) / oi2
+    df["Spec Long %"]  = (df["MM Long"] + df["Other Long"] + df["Non Rep Long"]) / df["Total OI"]
+    df["Comm Participation"] = df["Comm Gross %"]
+    df["Spec Participation"] = df["Spec Gross %"]
     return df.sort_values(["Commodity", "Date"]).reset_index(drop=True)
 
 
@@ -688,24 +697,34 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         return f"{'▲' if c > 0 else '▼'}{abs(c):.1f} ({abs(pct):.1f}%)"
 
     if is_cit:
+        def _pct(col):
+            v = latest.get(col, np.nan)
+            return "—" if pd.isna(v) else f"{v*100:.1f}%"
         kpi_items = [
-            (sc,           _fmt(sc),          _chg(sc)),
-            ("Comm Net",   _fmt("Comm Net"),   _chg("Comm Net")),
-            ("Index Net",  _fmt("Index Net"),  _chg("Index Net")),
-            ("Price",      f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
-            ("Spec %",     f"{latest['Spec Participation']*100:.1f}%" if pd.notna(latest["Spec Participation"]) else "—", ""),
-            ("Comm %",     f"{latest['Comm Participation']*100:.1f}%" if pd.notna(latest["Comm Participation"]) else "—", ""),
+            (sc,              _fmt(sc),           _chg(sc)),
+            ("Comm Net",      _fmt("Comm Net"),    _chg("Comm Net")),
+            ("Index Net",     _fmt("Index Net"),   _chg("Index Net")),
+            ("Price",         f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
+            ("Spec Gross %",  _pct("Spec Gross %"),  ""),
+            ("Spec Long %",   _pct("Spec Long %"),   ""),
+            ("Comm Gross %",  _pct("Comm Gross %"),  ""),
+            ("Comm Long %",   _pct("Comm Long %"),   ""),
         ]
     else:
+        def _pct(col):
+            v = latest.get(col, np.nan)
+            return "—" if pd.isna(v) else f"{v*100:.1f}%"
         kpi_items = [
-            ("Spec Net",   _fmt("Spec Net"),   _chg("Spec Net")),
-            ("MM Net",     _fmt("MM Net"),     _chg("MM Net")),
-            ("Comm Net",   _fmt("Comm Net"),   _chg("Comm Net")),
-            ("Swap Net",   _fmt("Swap Net"),   _chg("Swap Net")),
-            ("Others Net", _fmt("Others Net"), _chg("Others Net")),
-            ("Price",      f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
-            ("Spec %",     f"{latest['Spec Participation']*100:.1f}%" if pd.notna(latest["Spec Participation"]) else "—", ""),
-            ("Comm %",     f"{latest['Comm Participation']*100:.1f}%" if pd.notna(latest["Comm Participation"]) else "—", ""),
+            ("Spec Net",      _fmt("Spec Net"),    _chg("Spec Net")),
+            ("MM Net",        _fmt("MM Net"),      _chg("MM Net")),
+            ("Comm Net",      _fmt("Comm Net"),    _chg("Comm Net")),
+            ("Swap Net",      _fmt("Swap Net"),    _chg("Swap Net")),
+            ("Others Net",    _fmt("Others Net"),  _chg("Others Net")),
+            ("Price",         f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
+            ("Spec Gross %",  _pct("Spec Gross %"),  ""),
+            ("Spec Long %",   _pct("Spec Long %"),   ""),
+            ("Comm Gross %",  _pct("Comm Gross %"),  ""),
+            ("Comm Long %",   _pct("Comm Long %"),   ""),
         ]
     if is_cit:
         cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
