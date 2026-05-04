@@ -234,7 +234,7 @@ def load_rollex(comm: str):
 def spec_col(is_cit: bool, include_idx: bool = True) -> str:
     if is_cit:
         return "Spec Net (Idx inc.)" if include_idx else "Spec Net"
-    return "MM Net"
+    return "Spec Net"  # MM + Others + Non Rep
 
 
 def _align_to_cot(cot_dates: pd.Series, ext_df: pd.DataFrame,
