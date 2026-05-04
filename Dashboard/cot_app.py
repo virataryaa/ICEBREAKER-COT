@@ -331,7 +331,7 @@ def weekly_change_bars(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool,
         return go.Bar(
             x=dates, y=y, name=name,
             marker=dict(color=clr, opacity=opacity, line=dict(width=0)),
-            hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>{name}: %{{y:+.1f}}k<extra></extra>",
+            hovertemplate=f"<b>%{{x|%d %b %y}}</b><br>{name}: %{{y:.1f}}k<extra></extra>",
         )
 
     fig = go.Figure([
@@ -453,7 +453,7 @@ def _scatter_base(x, y, dates, color, title, xlabel, ylabel, height=380) -> go.F
             size=7, line=dict(width=0.5, color="white"),
         ),
         text=pd.to_datetime(dates).strftime("%Y-%m-%d"),
-        hovertemplate="<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>",
+        hovertemplate="<b>%{text}</b><br>X: %{x:.1f}<br>Y: %{y:.1f}<extra></extra>",
         showlegend=False,
     ))
     fig.add_trace(go.Scatter(
@@ -464,7 +464,7 @@ def _scatter_base(x, y, dates, color, title, xlabel, ylabel, height=380) -> go.F
     fig.add_trace(go.Scatter(
         x=[x[-1]], y=[y[-1]], mode="markers", showlegend=False,
         marker=dict(symbol="star", size=14, color=DRED, line=dict(width=1.2, color="white")),
-        hovertemplate=f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>X: {x[-1]:.2f}<br>Y: {y[-1]:.2f}<extra></extra>",
+        hovertemplate=f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>X: {x[-1]:.1f}<br>Y: {y[-1]:.1f}<extra></extra>",
     ))
     fig.update_layout(
         **_BASE,
@@ -531,9 +531,9 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
         text=pd.to_datetime(dates).strftime("%Y-%m-%d"),
         hovertemplate=(
             "<b>%{text}</b><br>"
-            f"{xlabel}: %{{x:.2f}}<br>"
-            f"{ylabel}: %{{y:.2f}}<br>"
-            f"{zlabel}: %{{z:.2f}}<extra></extra>"
+            f"{xlabel}: %{{x:.1f}}<br>"
+            f"{ylabel}: %{{y:.1f}}<br>"
+            f"{zlabel}: %{{z:.1f}}<extra></extra>"
         ),
         showlegend=False,
     ))
@@ -542,7 +542,7 @@ def _scatter3d_base(x, y, z, dates, color, title, xlabel, ylabel, zlabel, height
         marker=dict(symbol="diamond", size=12, color=DRED, line=dict(width=1.5, color="white")),
         hovertemplate=(
             f"<b>{pd.to_datetime(dates[-1]).strftime('%Y-%m-%d')}</b><br>"
-            f"{xlabel}: {x[-1]:.2f}<br>{ylabel}: {y[-1]:.2f}<br>{zlabel}: {z[-1]:.2f}<extra></extra>"
+            f"{xlabel}: {x[-1]:.1f}<br>{ylabel}: {y[-1]:.1f}<br>{zlabel}: {z[-1]:.1f}<extra></extra>"
         ),
     ))
     corr_str = f"r(X,Y) = {corr_xy:+.2f}   ·   r(X,Z) = {corr_xz:+.2f}   ·   r(Y,Z) = {corr_yz:+.2f}"
