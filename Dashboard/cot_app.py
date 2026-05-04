@@ -942,7 +942,7 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         pos_opts = ["MM Net", "Comm Net", "Swap Net", "Others Net", "Spec Net",
                     "MM Long", "MM Short", "Comm Long", "Comm Short", "Swap Long", "Swap Short", "Non Rep Net"]
 
-    tab_ov, tab_sc = st.tabs(["Overview", "Scatter (2D/3D)"])
+    tab_ov, tab_sc = st.tabs(["Overview", "Scatter Plots"])
 
     with tab_ov:
         kpi_row(kpi_items, comm)
@@ -1129,7 +1129,7 @@ def render_combined_cocoa(df_combined: pd.DataFrame, include_idx: bool = True):
     pos_opts = [sc, "Comm Net", "Spec Long", "Comm Long",
                 "Spec Short", "Comm Short", "Index Net", "Non Rep Net"]
 
-    tab_ov, tab_sc = st.tabs(["Overview", "Scatter (2D/3D)"])
+    tab_ov, tab_sc = st.tabs(["Overview", "Scatter Plots"])
 
     leg_opts = ["Spec Net", "Spec Long", "Spec Short",
                 "Comm Net", "Comm Long", "Comm Short", "Index Net"]
