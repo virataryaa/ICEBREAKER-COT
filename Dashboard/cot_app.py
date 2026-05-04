@@ -208,6 +208,26 @@ def build_combined_cocoa(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.Da
     out["Spec Net (Idx inc.)"] = out["Spec Net"] + out["Index Net"]
     out["Px"] = np.nan  # no single price reference for combined view
 
+    # Individual CC and LCC series for per-market lines and correlation scatters
+    # Spec Net is shared (computed in both loaders) → gets _cc/_lcc suffix
+    out["Spec Net CC"]    = m["Spec Net_cc"]
+    out["Spec Net LCC"]   = m["Spec Net_lcc"]
+    # Spec Long/Short only in CIT → no suffix; MM Long/Short only in Disagg → no suffix
+    out["Spec Long CC"]   = m["Spec Long"]
+    out["Spec Long LCC"]  = m["MM Long"]
+    out["Spec Short CC"]  = m["Spec Short"]
+    out["Spec Short LCC"] = m["MM Short"]
+    # Comm series shared → suffixed
+    out["Comm Net CC"]    = m["Comm Net_cc"]
+    out["Comm Net LCC"]   = m["Comm Net_lcc"]
+    out["Comm Long CC"]   = m["Comm Long_cc"]
+    out["Comm Long LCC"]  = m["Comm Long_lcc"]
+    out["Comm Short CC"]  = m["Comm Short_cc"]
+    out["Comm Short LCC"] = m["Comm Short_lcc"]
+    # Index only in CIT; Swap only in Disagg → no suffix
+    out["Index Net CC"]   = m["Index Net"]
+    out["Index Net LCC"]  = m["Swap Net"]
+
     oi2 = out["Total OI"] * 2
     out["Comm Gross %"] = (out["Comm Long"] + out["Comm Short"]) / oi2
     out["Comm Long %"]  = out["Comm Long"] / out["Total OI"]
@@ -494,22 +514,48 @@ def gross_net_lines_combined(df: pd.DataFrame, spec: bool = True,
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
     fig.add_trace(go.Scatter(
-        x=d["Date"], y=d[nc], name="Net",
+        x=d["Date"], y=d[nc], name="Net (combined)",
         fill="tozeroy",
         fillcolor=f"rgba({r},{g},{b},0.10)",
         line=dict(color=color, width=2.2, shape="spline", smoothing=0.6),
-        hovertemplate="<b>%{x|%b %Y}</b><br>Net: %{y:.1f}k<extra></extra>",
+        hovertemplate="<b>%{x|%b %Y}</b><br>Net (combined): %{y:.1f}k<extra></extra>",
     ), secondary_y=False)
     fig.add_trace(go.Scatter(
-        x=d["Date"], y=d[lc], name="Long",
+        x=d["Date"], y=d[lc], name="Long (combined)",
         line=dict(color=C_LONG, width=1.6, shape="spline", smoothing=0.6),
-        hovertemplate="<b>%{x|%b %Y}</b><br>Long: %{y:.1f}k<extra></extra>",
+        hovertemplate="<b>%{x|%b %Y}</b><br>Long (combined): %{y:.1f}k<extra></extra>",
     ), secondary_y=False)
     fig.add_trace(go.Scatter(
-        x=d["Date"], y=d[sc], name="Short",
+        x=d["Date"], y=d[sc], name="Short (combined)",
         line=dict(color=C_SHORT, width=1.6, shape="spline", smoothing=0.6),
-        hovertemplate="<b>%{x|%b %Y}</b><br>Short: %{y:.1f}k<extra></extra>",
+        hovertemplate="<b>%{x|%b %Y}</b><br>Short (combined): %{y:.1f}k<extra></extra>",
     ), secondary_y=False)
+
+    # Per-market CC and LCC lines
+    cc_color  = COMM_COLORS["CC"]   # amber
+    lcc_color = COMM_COLORS["LCC"]  # cyan
+    net_cc_col  = f"{label} Net CC"   if f"{label} Net CC"   in d.columns else None
+    net_lcc_col = f"{label} Net LCC"  if f"{label} Net LCC"  in d.columns else None
+    lng_cc_col  = f"{label} Long CC"  if f"{label} Long CC"  in d.columns else None
+    lng_lcc_col = f"{label} Long LCC" if f"{label} Long LCC" in d.columns else None
+    sht_cc_col  = f"{label} Short CC" if f"{label} Short CC" in d.columns else None
+    sht_lcc_col = f"{label} Short LCC"if f"{label} Short LCC"in d.columns else None
+
+    for col_name, trace_name, clr, dash, width in [
+        (net_cc_col,  f"{label} Net CC",   cc_color,  "dot",    1.3),
+        (net_lcc_col, f"{label} Net LCC",  lcc_color, "dashdot",1.3),
+        (lng_cc_col,  f"{label} Long CC",  cc_color,  "dot",    1.1),
+        (lng_lcc_col, f"{label} Long LCC", lcc_color, "dashdot",1.1),
+        (sht_cc_col,  f"{label} Short CC", cc_color,  "dot",    1.1),
+        (sht_lcc_col, f"{label} Short LCC",lcc_color, "dashdot",1.1),
+    ]:
+        if col_name and col_name in d.columns:
+            fig.add_trace(go.Scatter(
+                x=d["Date"], y=d[col_name], name=trace_name,
+                line=dict(color=clr, width=width, dash=dash),
+                opacity=0.65,
+                hovertemplate=f"<b>%{{x|%b %Y}}</b><br>{trace_name}: %{{y:.1f}}k<extra></extra>",
+            ), secondary_y=False)
 
     # Both rollex lines on secondary Y — different currencies, labelled clearly
     for cm, clr, dash in [("CC", C_PRICE, "dot"), ("LCC", C_OLD, "dashdot")]:
@@ -591,6 +637,48 @@ def _scatter_base(x, y, dates, color, title, xlabel, ylabel, height=380) -> go.F
         legend=dict(font_size=9, x=0.01, y=0.99, bgcolor="rgba(0,0,0,0)"),
     )
     return fig
+
+
+def cc_lcc_leg_scatter(df_combined: pd.DataFrame, leg: str) -> go.Figure:
+    d = df_combined[df_combined["Commodity"] == "CC+LCC"].sort_values("Date")
+    col_cc  = f"{leg} CC"
+    col_lcc = f"{leg} LCC"
+    if col_cc not in d.columns or col_lcc not in d.columns:
+        return go.Figure().update_layout(**_BASE, height=380,
+            title=dict(text=f"{leg}  ·  CC vs LCC  [columns not found]", font_size=12))
+    return _scatter_base(
+        x=d[col_cc].diff().values,
+        y=d[col_lcc].diff().values,
+        dates=d["Date"].values,
+        color=COMM_COLORS["CC"],
+        title=f"{leg}  ·  CC Δ vs LCC Δ  (weekly)",
+        xlabel=f"CC {leg} Δ  (k lots)",
+        ylabel=f"LCC {leg} Δ  (k lots)",
+    )
+
+
+def cc_lcc_vs_rollex_scatter(df_combined: pd.DataFrame, leg: str, market: str) -> go.Figure:
+    d = df_combined[df_combined["Commodity"] == "CC+LCC"].sort_values("Date")
+    col = f"{leg} {market}"
+    if col not in d.columns:
+        return go.Figure().update_layout(**_BASE, height=380,
+            title=dict(text=f"{market} — {leg}  [column not found]", font_size=12))
+    rl = load_rollex(market)
+    if rl is None:
+        return go.Figure().update_layout(**_BASE, height=380,
+            title=dict(text=f"{market} — Rollex not available", font_size=12))
+    rl_reset = rl[["rollex_px"]].reset_index()
+    rl_reset.columns = ["Date", "Rollex"]
+    rollex_vals = _align_to_cot(d["Date"], rl_reset, "Date", "Rollex")
+    return _scatter_base(
+        x=pd.Series(rollex_vals).pct_change().values * 100,
+        y=d[col].diff().values,
+        dates=d["Date"].values,
+        color=COMM_COLORS[market],
+        title=f"{market}  ·  Rollex Δ% vs {leg} Δ",
+        xlabel=f"{market} Rollex Δ%",
+        ylabel=f"{market} {leg} Δ  (k lots)",
+    )
 
 
 def px_chg_vs_cot_scatter(df: pd.DataFrame, comm: str, x_col: str) -> go.Figure:
@@ -1096,6 +1184,58 @@ def render_combined_cocoa(df_combined: pd.DataFrame, include_idx: bool = True):
                                       index=min(1, len(pos_opts)-1), key=f"3d_pos_z_{comm}")
             st.plotly_chart(position_vs_price_scatter_3d(df_combined, comm, y3_pos, z3_pos),
                             use_container_width=True)
+
+        with st.expander("CC vs LCC — Leg Correlation", expanded=False):
+            st.markdown(
+                "<p style='font-size:.75rem;color:#6e6e73;margin-bottom:10px'>"
+                "Pick any gross or net leg · see how CC and LCC move together · "
+                "gradient = older → newer · red star = latest</p>",
+                unsafe_allow_html=True,
+            )
+            leg_opts = ["Spec Net", "Spec Long", "Spec Short",
+                        "Comm Net", "Comm Long", "Comm Short", "Index Net"]
+            sel_leg = st.selectbox("Leg", leg_opts, key=f"cc_lcc_leg_{comm}")
+
+            col_cc  = f"{sel_leg} CC"
+            col_lcc = f"{sel_leg} LCC"
+            _d = d  # already CC+LCC filtered
+
+            if col_cc in _d.columns and col_lcc in _d.columns:
+                cc_chg  = _d[col_cc].diff().dropna()
+                lcc_chg = _d[col_lcc].diff().dropna()
+                shared  = cc_chg.index.intersection(lcc_chg.index)
+                if len(shared) > 5:
+                    r = float(np.corrcoef(cc_chg.loc[shared].values,
+                                          lcc_chg.loc[shared].values)[0, 1])
+                    r_color = ("#16a34a" if r > 0.5 else
+                               "#dc2626" if r < -0.5 else "#888")
+                    st.markdown(
+                        f"<div style='margin:4px 0 14px;padding:8px 14px;"
+                        f"background:rgba(0,0,0,0.03);border-radius:7px;"
+                        f"display:inline-block;font-size:.82rem'>"
+                        f"Pearson r  (CC vs LCC  ·  {sel_leg}  weekly Δ) : "
+                        f"<span style='font-weight:700;font-size:.95rem;"
+                        f"color:{r_color}'>{r:.3f}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+
+            # Main scatter: CC Δ vs LCC Δ
+            st.plotly_chart(cc_lcc_leg_scatter(df_combined, sel_leg),
+                            use_container_width=True)
+
+            # Side-by-side: each market vs its own Rollex
+            st.markdown(
+                "<p style='font-size:.75rem;color:#6e6e73;margin:10px 0 4px'>"
+                "Each market vs its Rollex  ·  weekly changes</p>",
+                unsafe_allow_html=True,
+            )
+            c1, c2 = st.columns(2)
+            with c1:
+                st.plotly_chart(cc_lcc_vs_rollex_scatter(df_combined, sel_leg, "CC"),
+                                use_container_width=True)
+            with c2:
+                st.plotly_chart(cc_lcc_vs_rollex_scatter(df_combined, sel_leg, "LCC"),
+                                use_container_width=True)
 
     st.markdown("---")
 
