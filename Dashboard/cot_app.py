@@ -731,15 +731,21 @@ def position_vs_price_scatter_3d(df: pd.DataFrame, comm: str, y_col: str, z_col:
 
 
 def histogram_trio(df: pd.DataFrame, comm: str, is_cit: bool,
-                   include_idx: bool = True) -> go.Figure:
+                   include_idx: bool = True, show_px: bool = True) -> go.Figure:
     sc          = spec_col(is_cit, include_idx)
     d           = df[df["Commodity"] == comm].sort_values("Date")
     primary_net = "Comm Net" if is_cit else "Swap Net"
     color       = ACCENT
-    specs_list  = [(sc, color), (primary_net, "#64748b"), ("Px", C_PRICE)]
-    labels      = [f"{sc} Δ", f"{primary_net} Δ", "Px Δ"]
+    if show_px:
+        specs_list = [(sc, color), (primary_net, "#64748b"), ("Px", C_PRICE)]
+        labels     = [f"{sc} Δ", f"{primary_net} Δ", "Px Δ"]
+        ncols      = 3
+    else:
+        specs_list = [(sc, color), (primary_net, "#64748b")]
+        labels     = [f"{sc} Δ", f"{primary_net} Δ"]
+        ncols      = 2
 
-    fig = make_subplots(rows=1, cols=3, subplot_titles=labels, horizontal_spacing=0.08)
+    fig = make_subplots(rows=1, cols=ncols, subplot_titles=labels, horizontal_spacing=0.08)
     for i, (col, clr) in enumerate(specs_list, 1):
         if col not in d.columns:
             continue
@@ -1045,7 +1051,7 @@ def render_combined_cocoa(df_combined: pd.DataFrame, include_idx: bool = True):
                             include_idx=include_idx), use_container_width=True)
 
         st.plotly_chart(histogram_trio(df_combined, comm, is_cit=True,
-                        include_idx=include_idx), use_container_width=True)
+                        include_idx=include_idx, show_px=False), use_container_width=True)
 
     with tab_sc:
         with st.expander("Price Chg % vs COT Element Δ", expanded=True):
