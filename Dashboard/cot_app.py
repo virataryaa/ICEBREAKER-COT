@@ -802,34 +802,20 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
         return f"{'▲' if c > 0 else '▼'}{abs(c):.1f} ({abs(pct):.1f}%)"
 
     if is_cit:
-        def _pct(col):
-            v = latest.get(col, np.nan)
-            return "—" if pd.isna(v) else f"{v*100:.1f}%"
         kpi_items = [
-            (sc,              _fmt(sc),           _chg(sc)),
-            ("Comm Net",      _fmt("Comm Net"),    _chg("Comm Net")),
-            ("Index Net",     _fmt("Index Net"),   _chg("Index Net")),
-            ("Price",         f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
-            ("Spec Gross %",  _pct("Spec Gross %"),  ""),
-            ("Spec Long %",   _pct("Spec Long %"),   ""),
-            ("Comm Gross %",  _pct("Comm Gross %"),  ""),
-            ("Comm Long %",   _pct("Comm Long %"),   ""),
+            (sc,          _fmt(sc),          _chg(sc)),
+            ("Comm Net",  _fmt("Comm Net"),  _chg("Comm Net")),
+            ("Index Net", _fmt("Index Net"), _chg("Index Net")),
+            ("Price",     f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
         ]
     else:
-        def _pct(col):
-            v = latest.get(col, np.nan)
-            return "—" if pd.isna(v) else f"{v*100:.1f}%"
         kpi_items = [
-            ("Spec Net",      _fmt("Spec Net"),    _chg("Spec Net")),
-            ("MM Net",        _fmt("MM Net"),      _chg("MM Net")),
-            ("Comm Net",      _fmt("Comm Net"),    _chg("Comm Net")),
-            ("Swap Net",      _fmt("Swap Net"),    _chg("Swap Net")),
-            ("Others Net",    _fmt("Others Net"),  _chg("Others Net")),
-            ("Price",         f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
-            ("Spec Gross %",  _pct("Spec Gross %"),  ""),
-            ("Spec Long %",   _pct("Spec Long %"),   ""),
-            ("Comm Gross %",  _pct("Comm Gross %"),  ""),
-            ("Comm Long %",   _pct("Comm Long %"),   ""),
+            ("Spec Net",   _fmt("Spec Net"),   _chg("Spec Net")),
+            ("MM Net",     _fmt("MM Net"),     _chg("MM Net")),
+            ("Comm Net",   _fmt("Comm Net"),   _chg("Comm Net")),
+            ("Swap Net",   _fmt("Swap Net"),   _chg("Swap Net")),
+            ("Others Net", _fmt("Others Net"), _chg("Others Net")),
+            ("Price",      f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
         ]
     if is_cit:
         cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
@@ -1018,25 +1004,11 @@ def render_combined_cocoa(df_combined: pd.DataFrame, include_idx: bool = True):
         if pd.isna(v) or pd.isna(p): return ""
         c = v - p
         return f"{'▲' if c > 0 else '▼'}{abs(c):.1f}k"
-    def _pct(col):
-        v = latest.get(col, np.nan)
-        return "—" if pd.isna(v) else f"{v*100:.1f}%"
-    def _px_chg():
-        v, p = latest.get("Px", np.nan), prev.get("Px", np.nan)
-        if pd.isna(v) or pd.isna(p): return ""
-        c = v - p
-        pct = c / p * 100 if p else 0
-        return f"{'▲' if c > 0 else '▼'}{abs(c):.1f} ({abs(pct):.1f}%)"
-
     kpi_items = [
-        (sc,             _fmt(sc),          _chg(sc)),
-        ("Comm Net",     _fmt("Comm Net"),   _chg("Comm Net")),
-        ("Index Net",    _fmt("Index Net"),  _chg("Index Net")),
-        ("Total OI",     _fmt("Total OI"),   _chg("Total OI")),
-        ("Spec Gross %", _pct("Spec Gross %"), ""),
-        ("Spec Long %",  _pct("Spec Long %"),  ""),
-        ("Comm Gross %", _pct("Comm Gross %"), ""),
-        ("Comm Long %",  _pct("Comm Long %"),  ""),
+        (sc,          _fmt(sc),          _chg(sc)),
+        ("Comm Net",  _fmt("Comm Net"),  _chg("Comm Net")),
+        ("Index Net", _fmt("Index Net"), _chg("Index Net")),
+        ("Total OI",  _fmt("Total OI"),  _chg("Total OI")),
     ]
 
     cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
