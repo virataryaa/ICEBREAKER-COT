@@ -49,21 +49,23 @@ C_OLD   = "#e67e22"   # old crop — warm orange
 C_NEW   = "#2980b9"   # new crop — blue
 
 COMM_COLORS = {
-    "KC":  "#1a56db",
-    "CC":  "#d97706",
-    "SB":  "#059669",
-    "CT":  "#7c3aed",
-    "RC":  "#dc2626",
-    "LCC": "#0891b2",
+    "KC":     "#1a56db",
+    "CC":     "#d97706",
+    "SB":     "#059669",
+    "CT":     "#7c3aed",
+    "RC":     "#dc2626",
+    "LCC":    "#0891b2",
+    "CC+LCC": "#92400e",
 }
 ACCENT = COMM_COLORS["KC"]  # fixed theme colour regardless of selected commodity
 COMM_NAMES = {
-    "KC":  "KC — Arabica",
-    "CC":  "CC — NYC Cocoa",
-    "SB":  "SB — Sugar #11",
-    "CT":  "CT — Cotton",
-    "RC":  "RC — Robusta",
-    "LCC": "LCC — LDN Cocoa",
+    "KC":     "KC — Arabica",
+    "CC":     "CC — NYC Cocoa",
+    "SB":     "SB — Sugar #11",
+    "CT":     "CT — Cotton",
+    "RC":     "RC — Robusta",
+    "LCC":    "LCC — LDN Cocoa",
+    "CC+LCC": "CC+LCC — Combined Cocoa",
 }
 
 _BASE = dict(
@@ -174,6 +176,44 @@ def load_oldnew() -> pd.DataFrame:
     df["MM Net"]   = df["MM Long"]   - df["MM Short"]
     df["Comm Net"] = df["Prod Long"] - df["Prod Short"]
     return df.sort_values(["Commodity", "Crop", "Date"]).reset_index(drop=True)
+
+
+def build_combined_cocoa(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.DataFrame:
+    cc  = df_cit[df_cit["Commodity"] == "CC"].sort_values("Date")
+    lcc = df_disagg[df_disagg["Commodity"] == "LCC"].sort_values("Date")
+    m   = pd.merge(cc, lcc, on="Date", suffixes=("_cc", "_lcc"), how="inner")
+    if m.empty:
+        return pd.DataFrame()
+
+    out = pd.DataFrame()
+    out["Date"]      = m["Date"]
+    out["Commodity"] = "CC+LCC"
+    out["Total OI"]  = m["Total OI_cc"]   + m["Total OI_lcc"]
+    out["Comm Long"] = m["Comm Long_cc"]  + m["Comm Long_lcc"]
+    out["Comm Short"]= m["Comm Short_cc"] + m["Comm Short_lcc"]
+    out["Comm Net"]  = m["Comm Net_cc"]   + m["Comm Net_lcc"]
+    # Spec: CIT Spec ≈ Disagg MM; Index ≈ Swap
+    out["Spec Long"]  = m["Spec Long_cc"]  + m["MM Long_lcc"]
+    out["Spec Short"] = m["Spec Short_cc"] + m["MM Short_lcc"]
+    out["Non Rep Long"]  = m["Non Rep Long_cc"]  + m["Non Rep Long_lcc"]
+    out["Non Rep Short"] = m["Non Rep Short_cc"] + m["Non Rep Short_lcc"]
+    out["Non Rep Net"]   = out["Non Rep Long"] - out["Non Rep Short"]
+    out["Spec Net"]      = (out["Spec Long"] - out["Spec Short"]
+                            + out["Non Rep Long"] - out["Non Rep Short"])
+    out["Index Long"]  = m["Index Long_cc"]  + m["Swap Long_lcc"]
+    out["Index Short"] = m["Index Short_cc"] + m["Swap Short_lcc"]
+    out["Index Net"]   = m["Index Net_cc"]   + m["Swap Net_lcc"]
+    out["Spec Net (Idx inc.)"] = out["Spec Net"] + out["Index Net"]
+    out["Px"] = m["Px_cc"]  # CC price as reference
+
+    oi2 = out["Total OI"] * 2
+    out["Comm Gross %"] = (out["Comm Long"] + out["Comm Short"]) / oi2
+    out["Comm Long %"]  = out["Comm Long"] / out["Total OI"]
+    out["Spec Gross %"] = (out["Spec Long"] + out["Spec Short"]) / oi2
+    out["Spec Long %"]  = out["Spec Long"] / out["Total OI"]
+    out["Comm Participation"] = out["Comm Gross %"]
+    out["Spec Participation"] = out["Spec Gross %"]
+    return out.sort_values("Date").reset_index(drop=True)
 
 
 @st.cache_data(ttl=600)
@@ -431,6 +471,69 @@ def gross_net_lines(df: pd.DataFrame, comm: str, is_cit: bool, spec: bool,
     rl_label = "Rollex" if (load_rollex(comm) is not None) else "Price"
     fig.update_yaxes(title_text="k lots",   title_font_size=10, secondary_y=False, **_ax())
     fig.update_yaxes(title_text=rl_label,   title_font_size=10, secondary_y=True,
+                     showgrid=False, tickfont=dict(size=10, color="#888"))
+    return fig
+
+
+def gross_net_lines_combined(df: pd.DataFrame, spec: bool = True,
+                              include_idx: bool = True) -> go.Figure:
+    d     = df[df["Commodity"] == "CC+LCC"].sort_values("Date")
+    color = COMM_COLORS["CC+LCC"]
+    if d.empty:
+        return go.Figure().update_layout(**_BASE, height=360)
+
+    if spec:
+        nc = "Spec Net (Idx inc.)" if include_idx else "Spec Net"
+        lc, sc, label = "Spec Long", "Spec Short", "Spec"
+    else:
+        nc, lc, sc, label = "Comm Net", "Comm Long", "Comm Short", "Comm"
+
+    r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d[nc], name="Net",
+        fill="tozeroy",
+        fillcolor=f"rgba({r},{g},{b},0.10)",
+        line=dict(color=color, width=2.2, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%b %Y}</b><br>Net: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d[lc], name="Long",
+        line=dict(color=C_LONG, width=1.6, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%b %Y}</b><br>Long: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+        x=d["Date"], y=d[sc], name="Short",
+        line=dict(color=C_SHORT, width=1.6, shape="spline", smoothing=0.6),
+        hovertemplate="<b>%{x|%b %Y}</b><br>Short: %{y:.1f}k<extra></extra>",
+    ), secondary_y=False)
+
+    # Both rollex lines on secondary Y — different currencies, labelled clearly
+    for cm, clr, dash in [("CC", C_PRICE, "dot"), ("LCC", C_OLD, "dashdot")]:
+        rl = load_rollex(cm)
+        if rl is not None:
+            rl_r = rl[["rollex_px"]].reset_index()
+            rl_r.columns = ["Date", "Rollex"]
+            vals = _align_to_cot(d["Date"], rl_r, "Date", "Rollex")
+            fig.add_trace(go.Scatter(
+                x=d["Date"], y=vals, name=f"{cm} Rollex",
+                line=dict(color=clr, width=1.4, dash=dash),
+                opacity=0.75,
+                hovertemplate=f"<b>%{{x|%b %Y}}</b><br>{cm} Rollex: %{{y:.1f}}<extra></extra>",
+            ), secondary_y=True)
+
+    fig.update_layout(
+        **_BASE, height=360,
+        title=dict(text=f"{label} Gross & Net  ·  k lots  ·  CC+LCC Combined",
+                   font=dict(size=12, color="#444"), x=0),
+        margin=dict(l=50, r=55, t=40, b=80),
+        legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center",
+                    font_size=10, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(**_ax(x=True), tickformat="%b '%y"),
+    )
+    fig.update_yaxes(title_text="k lots", title_font_size=10, secondary_y=False, **_ax())
+    fig.update_yaxes(title_text="Price (RHS · diff. ccy)", title_font_size=10, secondary_y=True,
                      showgrid=False, tickfont=dict(size=10, color="#888"))
     return fig
 
@@ -885,6 +988,134 @@ def render_commodity(df: pd.DataFrame, comm: str, is_cit: bool, include_idx: boo
                 z3_pos = st.selectbox("Z-axis position", pos_opts,
                                       index=min(1, len(pos_opts) - 1), key=f"3d_pos_z_{comm}")
             st.plotly_chart(position_vs_price_scatter_3d(df, comm, y3_pos, z3_pos),
+                            use_container_width=True)
+
+    st.markdown("---")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CC + LCC COMBINED RENDER
+# ══════════════════════════════════════════════════════════════════════════════
+def render_combined_cocoa(df_combined: pd.DataFrame, include_idx: bool = True):
+    comm = "CC+LCC"
+    d = df_combined[df_combined["Commodity"] == comm].sort_values("Date")
+    if d.empty:
+        st.info("No overlapping CC / LCC data in selected date range.")
+        return
+
+    comm_header(comm)
+    sc     = "Spec Net (Idx inc.)" if include_idx else "Spec Net"
+    latest = d.iloc[-1]
+    prev   = d.iloc[-2] if len(d) > 1 else latest
+
+    def _fmt(col):
+        v = latest.get(col, np.nan)
+        return "—" if pd.isna(v) else f"{v:.0f}k"
+    def _chg(col):
+        v, p = latest.get(col, np.nan), prev.get(col, np.nan)
+        if pd.isna(v) or pd.isna(p): return ""
+        c = v - p
+        return f"{'▲' if c > 0 else '▼'}{abs(c):.1f}k"
+    def _pct(col):
+        v = latest.get(col, np.nan)
+        return "—" if pd.isna(v) else f"{v*100:.1f}%"
+    def _px_chg():
+        v, p = latest.get("Px", np.nan), prev.get("Px", np.nan)
+        if pd.isna(v) or pd.isna(p): return ""
+        c = v - p
+        pct = c / p * 100 if p else 0
+        return f"{'▲' if c > 0 else '▼'}{abs(c):.1f} ({abs(pct):.1f}%)"
+
+    kpi_items = [
+        (sc,             _fmt(sc),          _chg(sc)),
+        ("Comm Net",     _fmt("Comm Net"),   _chg("Comm Net")),
+        ("Index Net",    _fmt("Index Net"),  _chg("Index Net")),
+        ("Total OI",     _fmt("Total OI"),   _chg("Total OI")),
+        ("CC Px",        f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
+        ("Spec Gross %", _pct("Spec Gross %"), ""),
+        ("Spec Long %",  _pct("Spec Long %"),  ""),
+        ("Comm Gross %", _pct("Comm Gross %"), ""),
+        ("Comm Long %",  _pct("Comm Long %"),  ""),
+    ]
+
+    cot_opts = [sc, "Comm Net", "Index Net", "Non Rep Net",
+                "Spec Long", "Spec Short", "Comm Long", "Comm Short"]
+    pos_opts = [sc, "Comm Net", "Spec Long", "Comm Long",
+                "Spec Short", "Comm Short", "Index Net", "Non Rep Net"]
+
+    tab_ov, tab_sc = st.tabs(["Overview", "Scatter (2D/3D)"])
+
+    with tab_ov:
+        kpi_row(kpi_items, "CC")
+
+        st.markdown(
+            "<p style='font-size:.7rem;color:#888;margin-bottom:8px'>"
+            "Spec = NYC Spec + LDN MM · Index = NYC Index + LDN Swap · "
+            "Price reference = CC (USD) · LCC Rollex in GBP on RHS</p>",
+            unsafe_allow_html=True,
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(weekly_change_bars(df_combined, comm, is_cit=True,
+                            spec=True, include_idx=include_idx), use_container_width=True)
+        with c2:
+            st.plotly_chart(weekly_change_bars(df_combined, comm, is_cit=True,
+                            spec=False, include_idx=include_idx), use_container_width=True)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(gross_net_lines_combined(df_combined, spec=True,
+                            include_idx=include_idx), use_container_width=True)
+        with c2:
+            st.plotly_chart(gross_net_lines_combined(df_combined, spec=False,
+                            include_idx=include_idx), use_container_width=True)
+
+        st.plotly_chart(histogram_trio(df_combined, comm, is_cit=True,
+                        include_idx=include_idx), use_container_width=True)
+
+    with tab_sc:
+        with st.expander("Price Chg % vs COT Element Δ", expanded=True):
+            sel_x = st.selectbox("COT element", cot_opts, key=f"px_cot_{comm}")
+            st.plotly_chart(px_chg_vs_cot_scatter(df_combined, comm, sel_x),
+                            use_container_width=True)
+
+        with st.expander("Net / Gross Position vs Price", expanded=True):
+            sel_y = st.selectbox("Position", pos_opts, key=f"pos_px_{comm}")
+            st.plotly_chart(position_vs_price_scatter(df_combined, comm, sel_y),
+                            use_container_width=True)
+
+        with st.expander("3D Scatter  (Beta Version)", expanded=True):
+            st.markdown(
+                "<p style='font-size:.75rem;color:#6e6e73;margin-bottom:12px'>"
+                "Rotate · zoom · hover freely &nbsp;·&nbsp; gradient = older → newer "
+                "&nbsp;·&nbsp; red diamond = latest observation</p>",
+                unsafe_allow_html=True,
+            )
+            st.markdown("<p style='font-size:.78rem;font-weight:600;color:#444;"
+                        "margin-bottom:6px'>Price Chg % vs COT Element Deltas</p>",
+                        unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            with c1:
+                y3_chg = st.selectbox("Y-axis COT element", cot_opts,
+                                      index=0, key=f"3d_pxchg_y_{comm}")
+            with c2:
+                z3_chg = st.selectbox("Z-axis COT element", cot_opts,
+                                      index=min(1, len(cot_opts)-1), key=f"3d_pxchg_z_{comm}")
+            st.plotly_chart(px_chg_vs_cot_scatter_3d(df_combined, comm, y3_chg, z3_chg),
+                            use_container_width=True)
+            st.markdown("---")
+            st.markdown("<p style='font-size:.78rem;font-weight:600;color:#444;"
+                        "margin-bottom:6px'>Price Level vs Net / Gross Positions</p>",
+                        unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            with c1:
+                y3_pos = st.selectbox("Y-axis position", pos_opts,
+                                      index=0, key=f"3d_pos_y_{comm}")
+            with c2:
+                z3_pos = st.selectbox("Z-axis position", pos_opts,
+                                      index=min(1, len(pos_opts)-1), key=f"3d_pos_z_{comm}")
+            st.plotly_chart(position_vs_price_scatter_3d(df_combined, comm, y3_pos, z3_pos),
                             use_container_width=True)
 
     st.markdown("---")
@@ -1560,7 +1791,7 @@ def main():
         )
         st.markdown("---")
 
-        ALL_COMMS = CIT_COMMS + DISAGG_COMMS
+        ALL_COMMS = CIT_COMMS + DISAGG_COMMS + ["CC+LCC"]
         comm = st.selectbox(
             "Commodity",
             ALL_COMMS,
@@ -1619,7 +1850,8 @@ def main():
     disagg_f = df_disagg[(df_disagg["Date"] >= d_start) & (df_disagg["Date"]    <= d_end)]
     df_f     = cit_f if is_cit else disagg_f
 
-    report = "CIT" if is_cit else "Disaggregated"
+    is_combined = (comm == "CC+LCC")
+    report = "CIT + Disaggregated (Combined)" if is_combined else ("CIT" if is_cit else "Disaggregated")
     st.markdown(
         f"<h2 style='font-size:1.4rem;font-weight:700;color:{NAVY};margin-bottom:0'>"
         f"COT Dashboard</h2>"
@@ -1634,11 +1866,18 @@ def main():
     ])
 
     with tab_comm:
-        render_commodity(df_f, comm, is_cit=is_cit, include_idx=include_idx)
+        if is_combined:
+            df_combined = build_combined_cocoa(cit_f, disagg_f)
+            render_combined_cocoa(df_combined, include_idx=include_idx)
+        else:
+            render_commodity(df_f, comm, is_cit=is_cit, include_idx=include_idx)
 
     with tab_crop:
-        on_f = df_on[(df_on["Date"] >= d_start) & (df_on["Date"] <= d_end)] if not df_on.empty else df_on
-        render_oldnew(on_f, comm, df_on_full=df_on)
+        if is_combined:
+            st.info("Old / New Crop split not available for the combined CC+LCC view.")
+        else:
+            on_f = df_on[(df_on["Date"] >= d_start) & (df_on["Date"] <= d_end)] if not df_on.empty else df_on
+            render_oldnew(on_f, comm, df_on_full=df_on)
 
     with tab_cross:
         idx_label = "Index included" if include_idx else "Index excluded"
