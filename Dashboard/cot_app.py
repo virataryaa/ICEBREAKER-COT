@@ -1563,6 +1563,35 @@ def main():
             format="MMM YYYY",
         )
 
+        st.markdown("---")
+
+        # ── Data status ───────────────────────────────────────────────────────
+        rl_sidebar = load_rollex(comm)
+        rl_latest  = (pd.to_datetime(rl_sidebar.index).max().strftime("%d %b %Y")
+                      if rl_sidebar is not None and len(rl_sidebar) > 0 else "—")
+        cot_latest = max_d.strftime("%d %b %Y")
+        run_time   = datetime.datetime.now().strftime("%d %b %Y  %H:%M")
+
+        def _sb_row(label, value):
+            return (
+                f"<div style='display:flex;justify-content:space-between;"
+                f"align-items:baseline;margin-bottom:5px'>"
+                f"<span style='font-size:.62rem;color:#999;text-transform:uppercase;"
+                f"letter-spacing:.07em'>{label}</span>"
+                f"<span style='font-size:.72rem;font-weight:600;color:#444'>{value}</span>"
+                f"</div>"
+            )
+
+        st.markdown(
+            f"<p style='font-size:.62rem;font-weight:700;color:{GRAY};"
+            f"text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px'>"
+            f"Data Status</p>"
+            + _sb_row("Last COT", cot_latest)
+            + _sb_row("Rollex Latest", rl_latest)
+            + _sb_row("As of", run_time),
+            unsafe_allow_html=True,
+        )
+
     # ── Main area ─────────────────────────────────────────────────────────────
     d_start = pd.Timestamp(date_range[0])
     d_end   = pd.Timestamp(date_range[1])
