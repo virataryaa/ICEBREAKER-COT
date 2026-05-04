@@ -206,7 +206,7 @@ def build_combined_cocoa(df_cit: pd.DataFrame, df_disagg: pd.DataFrame) -> pd.Da
     out["Index Short"] = m["Index Short"] + m["Swap Short"]
     out["Index Net"]   = m["Index Net"]   + m["Swap Net"]
     out["Spec Net (Idx inc.)"] = out["Spec Net"] + out["Index Net"]
-    out["Px"] = m["Px_cc"]  # CC price as reference
+    out["Px"] = np.nan  # no single price reference for combined view
 
     oi2 = out["Total OI"] * 2
     out["Comm Gross %"] = (out["Comm Long"] + out["Comm Short"]) / oi2
@@ -1033,7 +1033,6 @@ def render_combined_cocoa(df_combined: pd.DataFrame, include_idx: bool = True):
         ("Comm Net",     _fmt("Comm Net"),   _chg("Comm Net")),
         ("Index Net",    _fmt("Index Net"),  _chg("Index Net")),
         ("Total OI",     _fmt("Total OI"),   _chg("Total OI")),
-        ("CC Px",        f"{latest['Px']:.2f}" if pd.notna(latest["Px"]) else "—", _px_chg()),
         ("Spec Gross %", _pct("Spec Gross %"), ""),
         ("Spec Long %",  _pct("Spec Long %"),  ""),
         ("Comm Gross %", _pct("Comm Gross %"), ""),
