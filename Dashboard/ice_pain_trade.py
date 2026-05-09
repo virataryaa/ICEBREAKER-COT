@@ -452,14 +452,14 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                 week_label_map = {d: f"W-{i}" if i > 0 else "W0" for i, d in enumerate(sorted_dates)}
                 tbl_df["_wlbl"] = tbl_df["Date"].map(week_label_map)
 
-                agg = tbl_df.groupby("RxBin", observed=True)
-                grouped          = agg[flow_cols].sum().sort_index(ascending=False)
-                grouped["n"]     = agg["_wlbl"].count().reindex(grouped.index)
+                agg = tbl_df.groupby("RxBin", observed=False)
+                grouped          = agg[flow_cols].sum().reindex(bin_lbls).sort_index(ascending=False)
+                grouped["n"]     = agg["_wlbl"].count().reindex(bin_lbls).reindex(grouped.index)
                 grouped["Weeks"] = agg["_wlbl"].apply(
                     lambda s: ",  ".join(s.sort_values().tolist())
-                ).reindex(grouped.index)
+                ).reindex(bin_lbls).reindex(grouped.index)
 
-                # Keep all buckets — empty ones show as blank in the table
+                # All buckets shown — empty rows have zeros/blank
 
                 # Total row — numeric cols only, blank for Weeks
                 total_row = grouped[flow_cols + ["n"]].sum()
