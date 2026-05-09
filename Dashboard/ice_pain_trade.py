@@ -461,23 +461,56 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
 
                 # All buckets shown — empty rows have zeros/blank
 
-                # Total row — numeric cols only, blank for Weeks
-                total_row = grouped[flow_cols + ["n"]].sum()
-                total_row["Weeks"] = ""
-                display_tbl = pd.concat([grouped, total_row.to_frame().T.rename(index={0: "TOTAL"})])
+                # Above / below current Rollex subtotals
+                # bins[:-1] are lower edges; bucket i covers [bins[i], bins[i+1])
+                # sorted descending so bins_desc[i] matches grouped.index[i]
+                bins_desc   = bins[:-1][::-1]
+                above_mask  = bins_desc >= window_px
+                below_mask  = (bins_desc + rx_step) <= window_px
+
+                grp_filled  = grouped[flow_cols + ["n"]].fillna(0)
+                above_row   = grp_filled[above_mask].sum()
+                below_row   = grp_filled[below_mask].sum()
+
+                above_row["Weeks"] = f"≥ {window_px:.0f}"
+                below_row["Weeks"] = f"< {window_px:.0f}"
+
+                total_row           = grp_filled.sum()
+                total_row["Weeks"]  = ""
+
+                summary_labels = [
+                    f"Above  ({window_px:.0f})",
+                    f"Below  ({window_px:.0f})",
+                    "TOTAL",
+                ]
+                summary_df = pd.DataFrame(
+                    [above_row, below_row, total_row],
+                    index=summary_labels,
+                )
+                display_tbl = pd.concat([grouped, summary_df])
                 display_tbl.index.name = "Rollex Range"
 
                 def _style_bucket(df):
                     styles = pd.DataFrame("", index=df.index, columns=df.columns)
-                    for col in flow_cols:
-                        if col in ("Long Add", "Short Cover"):
-                            styles[col] = df[col].apply(
-                                lambda v: "color:#1a6b1a;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(float(v)) and float(v) > 0)
-                                else ("color:#dc2626" if (isinstance(v, (int, float)) and not np.isnan(float(v)) and float(v) < 0) else ""))
-                        elif col in ("Long Liq", "Short Add"):
-                            styles[col] = df[col].apply(
-                                lambda v: "color:#dc2626;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(float(v)) and float(v) != 0)
-                                else "")
+                    for row_idx in df.index:
+                        is_summary = row_idx in summary_labels
+                        for col in df.columns:
+                            v = df.at[row_idx, col]
+                            try:
+                                fv = float(v)
+                            except (TypeError, ValueError):
+                                continue
+                            if np.isnan(fv):
+                                continue
+                            bold = "font-weight:700;" if is_summary else "font-weight:600;"
+                            if col in ("Long Add", "Short Cover"):
+                                color = "#1a6b1a" if fv > 0 else "#dc2626" if fv < 0 else ""
+                            elif col in ("Long Liq", "Short Add"):
+                                color = "#dc2626" if fv != 0 else ""
+                            else:
+                                color = ""
+                            if color:
+                                styles.at[row_idx, col] = f"color:{color};{bold}"
                     return styles
 
                 fmt = {c: "{:+.2f}" for c in flow_cols}
@@ -491,9 +524,12 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                             {"selector": "thead th",
                              "props": [("font-size", ".75rem"), ("color", "#444"),
                                        ("font-weight", "600"), ("text-align", "center")]},
+                            {"selector": "tr:nth-last-child(-n+3) td",
+                             "props": [("border-top", "1px solid #ddd"),
+                                       ("background", "#f5f5f7")]},
                             {"selector": "tr:last-child td",
-                             "props": [("border-top", "2px solid #ccc"),
-                                       ("font-weight", "700"), ("background", "#f5f5f7")]},
+                             "props": [("border-top", "2px solid #bbb"),
+                                       ("background", "#ebebef")]},
                             {"selector": "td", "props": [("font-size", ".78rem"),
                                                           ("text-align", "right")]},
                             {"selector": "td:last-child",
