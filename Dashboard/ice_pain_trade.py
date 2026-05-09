@@ -414,7 +414,7 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                     step=1, key=f"rx_step_{comm}",
                 )
 
-            tbl_df = scatter_df[["Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
+            tbl_df = scatter_df[["Date", "Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
 
             if not tbl_df.empty and rx_step > 0:
                 rx_floor = (tbl_df["Rollex"].min() // rx_step) * rx_step
@@ -424,34 +424,45 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
 
                 tbl_df["RxBin"] = pd.cut(tbl_df["Rollex"], bins=bins, labels=bin_lbls, right=False)
                 flow_cols = ["Long Add", "Long Liq", "Short Add", "Short Cover"]
-                grouped   = (tbl_df.groupby("RxBin", observed=True)[flow_cols]
-                                   .sum()
-                                   .sort_index(ascending=False))
 
-                # Drop all-zero rows (price ranges with no COT observations)
-                grouped = grouped[(grouped != 0).any(axis=1)]
+                # Date strings — short format, add year only if range spans multiple years
+                span_years = tbl_df["Date"].dt.year.nunique() > 1
+                date_fmt   = "%d %b '%y" if span_years else "%d %b"
+                tbl_df["_date_str"] = tbl_df["Date"].dt.strftime(date_fmt)
 
-                # Total row
-                total_row        = grouped.sum().rename("TOTAL")
-                display_tbl      = pd.concat([grouped, total_row.to_frame().T])
+                agg = tbl_df.groupby("RxBin", observed=True)
+                grouped        = agg[flow_cols].sum().sort_index(ascending=False)
+                grouped["n"]   = agg["_date_str"].count().reindex(grouped.index)
+                grouped["Dates"] = agg["_date_str"].apply(lambda s: ",  ".join(s.tolist())).reindex(grouped.index)
+
+                # Drop empty buckets
+                grouped = grouped[(grouped[flow_cols] != 0).any(axis=1)]
+
+                # Total row — numeric cols only, blank for Dates
+                total_row = grouped[flow_cols + ["n"]].sum()
+                total_row["Dates"] = ""
+                display_tbl = pd.concat([grouped, total_row.to_frame().T.rename(index={0: "TOTAL"})])
                 display_tbl.index.name = "Rollex Range"
 
                 def _style_bucket(df):
                     styles = pd.DataFrame("", index=df.index, columns=df.columns)
-                    for col in df.columns:
+                    for col in flow_cols:
                         if col in ("Long Add", "Short Cover"):
                             styles[col] = df[col].apply(
-                                lambda v: "color:#1a6b1a;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(v) and v > 0)
-                                else ("color:#dc2626" if (isinstance(v, (int, float)) and not np.isnan(v) and v < 0) else ""))
+                                lambda v: "color:#1a6b1a;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(float(v)) and float(v) > 0)
+                                else ("color:#dc2626" if (isinstance(v, (int, float)) and not np.isnan(float(v)) and float(v) < 0) else ""))
                         elif col in ("Long Liq", "Short Add"):
                             styles[col] = df[col].apply(
-                                lambda v: "color:#dc2626;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(v) and v != 0)
+                                lambda v: "color:#dc2626;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(float(v)) and float(v) != 0)
                                 else "")
                     return styles
 
+                fmt = {c: "{:+.2f}" for c in flow_cols}
+                fmt["n"] = "{:.0f}"
+
                 styled_tbl = (
                     display_tbl.style
-                        .format("{:+.2f}", na_rep="—")
+                        .format(fmt, na_rep="—")
                         .apply(_style_bucket, axis=None)
                         .set_table_styles([
                             {"selector": "thead th",
@@ -462,6 +473,9 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                                        ("font-weight", "700"), ("background", "#f5f5f7")]},
                             {"selector": "td", "props": [("font-size", ".78rem"),
                                                           ("text-align", "right")]},
+                            {"selector": "td:last-child",
+                             "props": [("text-align", "left"), ("color", "#666"),
+                                       ("font-size", ".72rem"), ("white-space", "nowrap")]},
                             {"selector": "th.row_heading",
                              "props": [("font-size", ".75rem"), ("text-align", "left"),
                                        ("color", "#555"), ("font-weight", "500")]},
