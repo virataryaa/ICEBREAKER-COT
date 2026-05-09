@@ -459,8 +459,7 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                     lambda s: ",  ".join(s.sort_values().tolist())
                 ).reindex(grouped.index)
 
-                # Drop empty buckets
-                grouped = grouped[(grouped[flow_cols] != 0).any(axis=1)]
+                # Keep all buckets — empty ones show as blank in the table
 
                 # Total row — numeric cols only, blank for Weeks
                 total_row = grouped[flow_cols + ["n"]].sum()
