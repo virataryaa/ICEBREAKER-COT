@@ -43,6 +43,18 @@ def lbl(text):
             f"margin-bottom:8px'><span style='font-size:.78rem;font-weight:500;"
             f"letter-spacing:.07em;text-transform:uppercase;color:#dde4f0'>{text}</span></div>")
 
+def _nice_step(price_range):
+    """Return a round step targeting ~12 buckets over the given price range."""
+    if price_range <= 0:
+        return 1
+    raw = price_range / 12
+    mag = 10 ** np.floor(np.log10(raw))
+    for mult in [1, 2, 2.5, 5, 10]:
+        candidate = mag * mult
+        if candidate >= raw:
+            return max(1, int(candidate))
+    return max(1, int(mag * 10))
+
 # ── Rollex utils ─────────────────────────────────────────────────────────────
 def _rx_load(comm):
     p = Path(__file__).parent.parent / "Database" / "Rollex" / f"rollex_{comm}.parquet"
@@ -408,11 +420,6 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
         # ── Rollex bucket table ───────────────────────────────────────────────
         with st.expander("Positioning by Rollex Level", expanded=False):
             _tc1, _tc2 = st.columns([1, 1])
-            with _tc1:
-                rx_step = st.number_input(
-                    "Rollex step", min_value=1, value=cfg["rx_step"],
-                    step=1, key=f"rx_step_{comm}",
-                )
             with _tc2:
                 n_weeks = st.number_input(
                     "Weeks", min_value=1, max_value=500, value=13,
@@ -421,6 +428,15 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
 
             tbl_full = df[["Date", "Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
             tbl_df   = tbl_full.sort_values("Date").tail(int(n_weeks)).copy()
+
+            # Auto step: nice round number targeting ~12 buckets over the data range
+            _rx_range   = tbl_df["Rollex"].max() - tbl_df["Rollex"].min() if not tbl_df.empty else 1
+            _auto_step  = _nice_step(_rx_range)
+            with _tc1:
+                rx_step = st.number_input(
+                    f"Rollex step  (auto: {_auto_step})", min_value=1,
+                    value=_auto_step, step=1, key=f"rx_step_{comm}",
+                )
 
             if not tbl_df.empty and rx_step > 0:
                 rx_floor = (tbl_df["Rollex"].min() // rx_step) * rx_step
