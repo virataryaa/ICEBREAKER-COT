@@ -407,29 +407,20 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
 
         # ── Rollex bucket table ───────────────────────────────────────────────
         with st.expander("Positioning by Rollex Level", expanded=False):
-            _tc1, _tc2, _tc3 = st.columns([1, 1, 3])
+            _tc1, _tc2 = st.columns([1, 1])
             with _tc1:
                 rx_step = st.number_input(
                     "Rollex step", min_value=1, value=cfg["rx_step"],
                     step=1, key=f"rx_step_{comm}",
                 )
-            # Independent date slider — defaults to 1 year, independent of main chart slider
-            tbl_full = df[["Date", "Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
-            _tbl_min  = tbl_full["Date"].min().date()
-            _tbl_max  = tbl_full["Date"].max().date()
-            _tbl_def  = (tbl_full["Date"].max() - pd.DateOffset(years=1)).date()
             with _tc2:
-                st.markdown("<div style='margin-top:4px'></div>", unsafe_allow_html=True)
-                tbl_range = st.slider(
-                    "Table range", min_value=_tbl_min, max_value=_tbl_max,
-                    value=(_tbl_def, _tbl_max), format="MMM YYYY",
-                    key=f"tbl_sl_{comm}",
+                n_weeks = st.number_input(
+                    "Weeks", min_value=1, max_value=500, value=13,
+                    step=1, key=f"tbl_wks_{comm}",
                 )
 
-            tbl_df = tbl_full[
-                (tbl_full["Date"] >= pd.Timestamp(tbl_range[0])) &
-                (tbl_full["Date"] <= pd.Timestamp(tbl_range[1]))
-            ].copy()
+            tbl_full = df[["Date", "Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
+            tbl_df   = tbl_full.sort_values("Date").tail(int(n_weeks)).copy()
 
             if not tbl_df.empty and rx_step > 0:
                 rx_floor = (tbl_df["Rollex"].min() // rx_step) * rx_step
