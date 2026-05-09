@@ -53,17 +53,17 @@ _BASE = Path(__file__).parent.parent / "Database"  # COT parquets only
 
 COMM_CONFIG = {
     "KC":  {"name": "Arabica",      "cot": "cit",    "color": "#0a2463",
-            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short"},
+            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short",  "rx_step": 25},
     "RC":  {"name": "Robusta",      "cot": "disagg", "color": "#8b1a00",
-            "third_leg": "Other Rep.", "long3": "Other Long", "short3": "Other Short"},
+            "third_leg": "Other Rep.", "long3": "Other Long", "short3": "Other Short",  "rx_step": 200},
     "CC":  {"name": "NYC Cocoa",    "cot": "cit",    "color": "#e8a020",
-            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short"},
+            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short",  "rx_step": 500},
     "LCC": {"name": "London Cocoa", "cot": "disagg", "color": "#4a7fb5",
-            "third_leg": "Other Rep.", "long3": "Other Long", "short3": "Other Short"},
+            "third_leg": "Other Rep.", "long3": "Other Long", "short3": "Other Short",  "rx_step": 500},
     "SB":  {"name": "Sugar",        "cot": "cit",    "color": "#1a6b1a",
-            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short"},
+            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short",  "rx_step": 2},
     "CT":  {"name": "Cotton",       "cot": "cit",    "color": "#7b2d8b",
-            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short"},
+            "third_leg": "Index",      "long3": "Index Long", "short3": "Index Short",  "rx_step": 5},
 }
 
 CIT_FILE    = _BASE / "cot_cit.parquet"
@@ -146,7 +146,7 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
         # ── Controls (collapsible) ────────────────────────────────────────────
         min_d         = df_comm["Date"].min().date()
         max_d         = max(df_comm["Date"].max().date(), rollex_daily["Date"].max().date())
-        default_start = (df_comm["Date"].max() - pd.DateOffset(years=2)).date()
+        default_start = (df_comm["Date"].max() - pd.DateOffset(months=3)).date()
 
         _radio_key = f"radio_{comm}_{is_cit}"
         _dr        = st.session_state.get(f"sl_{comm}", (default_start, max_d))
@@ -404,6 +404,76 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
         _l, _ch, _r = st.columns([0.125, 0.75, 0.125])
         with _ch:
             st.plotly_chart(fig2, use_container_width=True)
+
+        # ── Rollex bucket table ───────────────────────────────────────────────
+        with st.expander("Positioning by Rollex Level", expanded=False):
+            _tc1, _tc2 = st.columns([1, 4])
+            with _tc1:
+                rx_step = st.number_input(
+                    "Rollex step", min_value=1, value=cfg["rx_step"],
+                    step=1, key=f"rx_step_{comm}",
+                )
+
+            tbl_df = scatter_df[["Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
+
+            if not tbl_df.empty and rx_step > 0:
+                rx_floor = (tbl_df["Rollex"].min() // rx_step) * rx_step
+                rx_ceil  = (tbl_df["Rollex"].max() // rx_step + 1) * rx_step
+                bins     = np.arange(rx_floor, rx_ceil + rx_step, rx_step)
+                bin_lbls = [f"{int(b)} – {int(b + rx_step)}" for b in bins[:-1]]
+
+                tbl_df["RxBin"] = pd.cut(tbl_df["Rollex"], bins=bins, labels=bin_lbls, right=False)
+                flow_cols = ["Long Add", "Long Liq", "Short Add", "Short Cover"]
+                grouped   = (tbl_df.groupby("RxBin", observed=True)[flow_cols]
+                                   .sum()
+                                   .sort_index(ascending=False))
+
+                # Drop all-zero rows (price ranges with no COT observations)
+                grouped = grouped[(grouped != 0).any(axis=1)]
+
+                # Total row
+                total_row        = grouped.sum().rename("TOTAL")
+                display_tbl      = pd.concat([grouped, total_row.to_frame().T])
+                display_tbl.index.name = "Rollex Range"
+
+                def _style_bucket(df):
+                    styles = pd.DataFrame("", index=df.index, columns=df.columns)
+                    for col in df.columns:
+                        if col in ("Long Add", "Short Cover"):
+                            styles[col] = df[col].apply(
+                                lambda v: "color:#1a6b1a;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(v) and v > 0)
+                                else ("color:#dc2626" if (isinstance(v, (int, float)) and not np.isnan(v) and v < 0) else ""))
+                        elif col in ("Long Liq", "Short Add"):
+                            styles[col] = df[col].apply(
+                                lambda v: "color:#dc2626;font-weight:600" if (isinstance(v, (int, float)) and not np.isnan(v) and v != 0)
+                                else "")
+                    return styles
+
+                styled_tbl = (
+                    display_tbl.style
+                        .format("{:+.2f}", na_rep="—")
+                        .apply(_style_bucket, axis=None)
+                        .set_table_styles([
+                            {"selector": "thead th",
+                             "props": [("font-size", ".75rem"), ("color", "#444"),
+                                       ("font-weight", "600"), ("text-align", "center")]},
+                            {"selector": "tr:last-child td",
+                             "props": [("border-top", "2px solid #ccc"),
+                                       ("font-weight", "700"), ("background", "#f5f5f7")]},
+                            {"selector": "td", "props": [("font-size", ".78rem"),
+                                                          ("text-align", "right")]},
+                            {"selector": "th.row_heading",
+                             "props": [("font-size", ".75rem"), ("text-align", "left"),
+                                       ("color", "#555"), ("font-weight", "500")]},
+                        ])
+                )
+                st.dataframe(styled_tbl, use_container_width=True)
+                st.markdown(
+                    f"<p style='font-size:.68rem;color:#999;margin-top:4px'>"
+                    f"Values in k lots · {len(tbl_df)} COT observations in selected period · "
+                    f"step = {rx_step}</p>",
+                    unsafe_allow_html=True,
+                )
 
         st.markdown("<hr>", unsafe_allow_html=True)
 
