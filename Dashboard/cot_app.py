@@ -1925,12 +1925,21 @@ def main():
             ALL_COMMS,
             format_func=lambda c: COMM_NAMES.get(c, c),
         )
-        is_cit = comm in CIT_COMMS
+
+        if comm in CIT_COMMS:
+            st.markdown("---")
+            report_type = st.radio("Report", ["CIT", "Disaggregated"], index=0, horizontal=True)
+            is_cit = report_type == "CIT"
+        else:
+            is_cit = False
 
         st.markdown("---")
 
-        idx_choice  = st.radio("Spec Net", ["Include Index", "Exclude Index"], index=0)
-        include_idx = idx_choice == "Include Index"
+        if is_cit:
+            idx_choice  = st.radio("Spec Net", ["Include Index", "Exclude Index"], index=0)
+            include_idx = idx_choice == "Include Index"
+        else:
+            include_idx = False
 
         st.markdown("---")
 

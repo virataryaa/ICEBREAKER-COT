@@ -36,7 +36,7 @@ DISAGG_PATH  = DB_DIR / "cot_disagg.parquet"
 ROLLEX_SRC   = Path(r"C:\Users\virat.arya\ETG\SoftsDatabase - Documents\Database\Hardmine\ICEBREAKER\Rollex\Database")
 ROLLEX_DEST  = DB_DIR / "Rollex"
 ROLLEX_COMMS = ["KC", "RC", "CC", "SB", "CT", "LCC", "LSU"]
-START_DATE   = "2010-01-01"
+START_DATE   = "2006-01-01"
 
 # ── CIT config ────────────────────────────────────────────────────────────────
 CIT_FIELDS = [
@@ -123,6 +123,10 @@ DISAGG_INT_COLS = ['Comm Long', 'Comm Short',
                    'Non Rep Long', 'Non Rep Short', 'Total OI']
 
 DISAGG_COMMODITIES = {
+    "KC":  {"cot_sym": "KC #COMB-CFTC",     "px_sym": "%KC 1!"},
+    "CC":  {"cot_sym": "CC #COMB-CFTC",     "px_sym": "%CC 1!"},
+    "SB":  {"cot_sym": "SB #COMB-CFTC",     "px_sym": "%SB 1!"},
+    "CT":  {"cot_sym": "CT #COMB-CFTC",     "px_sym": "%CT 1!"},
     "RC":  {"cot_sym": "RC.ICE #COMB-CFTC", "px_sym": "%RC 1!-ICE"},
     "LCC": {"cot_sym": "C.ICE #COMB-CFTC",  "px_sym": "%C 1!-ICE"},
 }
@@ -258,14 +262,18 @@ END_DATE   = datetime.today().strftime('%Y-%m-%d')
 # Filter by --commodity if given
 if args.commodity:
     comm = args.commodity.upper()
-    if comm in CIT_COMMODITIES:
-        run_disagg = False
-        CIT_COMMODITIES = {comm: CIT_COMMODITIES[comm]}
-    elif comm in DISAGG_COMMODITIES:
+    in_cit    = comm in CIT_COMMODITIES
+    in_disagg = comm in DISAGG_COMMODITIES
+    if not in_cit and not in_disagg:
+        print(f"Unknown commodity: {comm}"); exit(1)
+    if in_cit:
+        CIT_COMMODITIES    = {comm: CIT_COMMODITIES[comm]}
+    else:
         run_cit = False
+    if in_disagg:
         DISAGG_COMMODITIES = {comm: DISAGG_COMMODITIES[comm]}
     else:
-        print(f"Unknown commodity: {comm}"); exit(1)
+        run_disagg = False
 
 # ── CIT run ───────────────────────────────────────────────────────────────────
 if run_cit:
