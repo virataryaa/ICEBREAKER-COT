@@ -407,14 +407,29 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
 
         # ── Rollex bucket table ───────────────────────────────────────────────
         with st.expander("Positioning by Rollex Level", expanded=False):
-            _tc1, _tc2 = st.columns([1, 4])
+            _tc1, _tc2, _tc3 = st.columns([1, 1, 3])
             with _tc1:
                 rx_step = st.number_input(
                     "Rollex step", min_value=1, value=cfg["rx_step"],
                     step=1, key=f"rx_step_{comm}",
                 )
+            # Independent date slider — defaults to 1 year, independent of main chart slider
+            tbl_full = df[["Date", "Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
+            _tbl_min  = tbl_full["Date"].min().date()
+            _tbl_max  = tbl_full["Date"].max().date()
+            _tbl_def  = (tbl_full["Date"].max() - pd.DateOffset(years=1)).date()
+            with _tc2:
+                st.markdown("<div style='margin-top:4px'></div>", unsafe_allow_html=True)
+                tbl_range = st.slider(
+                    "Table range", min_value=_tbl_min, max_value=_tbl_max,
+                    value=(_tbl_def, _tbl_max), format="MMM YYYY",
+                    key=f"tbl_sl_{comm}",
+                )
 
-            tbl_df = scatter_df[["Date", "Rollex", "Long Add", "Long Liq", "Short Add", "Short Cover"]].dropna(subset=["Rollex"]).copy()
+            tbl_df = tbl_full[
+                (tbl_full["Date"] >= pd.Timestamp(tbl_range[0])) &
+                (tbl_full["Date"] <= pd.Timestamp(tbl_range[1]))
+            ].copy()
 
             if not tbl_df.empty and rx_step > 0:
                 rx_floor = (tbl_df["Rollex"].min() // rx_step) * rx_step
@@ -425,22 +440,24 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                 tbl_df["RxBin"] = pd.cut(tbl_df["Rollex"], bins=bins, labels=bin_lbls, right=False)
                 flow_cols = ["Long Add", "Long Liq", "Short Add", "Short Cover"]
 
-                # Date strings — short format, add year only if range spans multiple years
-                span_years = tbl_df["Date"].dt.year.nunique() > 1
-                date_fmt   = "%d %b '%y" if span_years else "%d %b"
-                tbl_df["_date_str"] = tbl_df["Date"].dt.strftime(date_fmt)
+                # Assign W0 / W-1 / W-2 … labels relative to most recent date in table
+                sorted_dates   = tbl_df["Date"].sort_values(ascending=False).reset_index(drop=True)
+                week_label_map = {d: f"W-{i}" if i > 0 else "W0" for i, d in enumerate(sorted_dates)}
+                tbl_df["_wlbl"] = tbl_df["Date"].map(week_label_map)
 
                 agg = tbl_df.groupby("RxBin", observed=True)
-                grouped        = agg[flow_cols].sum().sort_index(ascending=False)
-                grouped["n"]   = agg["_date_str"].count().reindex(grouped.index)
-                grouped["Dates"] = agg["_date_str"].apply(lambda s: ",  ".join(s.tolist())).reindex(grouped.index)
+                grouped          = agg[flow_cols].sum().sort_index(ascending=False)
+                grouped["n"]     = agg["_wlbl"].count().reindex(grouped.index)
+                grouped["Weeks"] = agg["_wlbl"].apply(
+                    lambda s: ",  ".join(s.sort_values().tolist())
+                ).reindex(grouped.index)
 
                 # Drop empty buckets
                 grouped = grouped[(grouped[flow_cols] != 0).any(axis=1)]
 
-                # Total row — numeric cols only, blank for Dates
+                # Total row — numeric cols only, blank for Weeks
                 total_row = grouped[flow_cols + ["n"]].sum()
-                total_row["Dates"] = ""
+                total_row["Weeks"] = ""
                 display_tbl = pd.concat([grouped, total_row.to_frame().T.rename(index={0: "TOTAL"})])
                 display_tbl.index.name = "Rollex Range"
 
@@ -474,8 +491,9 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                             {"selector": "td", "props": [("font-size", ".78rem"),
                                                           ("text-align", "right")]},
                             {"selector": "td:last-child",
-                             "props": [("text-align", "left"), ("color", "#666"),
-                                       ("font-size", ".72rem"), ("white-space", "nowrap")]},
+                             "props": [("text-align", "left"), ("color", "#555"),
+                                       ("font-size", ".72rem"), ("white-space", "nowrap"),
+                                       ("font-family", "monospace")]},
                             {"selector": "th.row_heading",
                              "props": [("font-size", ".75rem"), ("text-align", "left"),
                                        ("color", "#555"), ("font-weight", "500")]},
