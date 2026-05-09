@@ -111,27 +111,47 @@ def _cal_to_slider(comm):
 tab_labels = [COMM_CONFIG[c]["name"] for c in COMM_CONFIG]
 comm_tabs  = st.tabs(tab_labels)
 
+US_COMMS = ["KC", "CC", "SB", "CT"]
+
 for tab, comm in zip(comm_tabs, COMM_CONFIG):
     cfg          = COMM_CONFIG[comm]
-    is_cit       = cfg["cot"] == "cit"
-    cot_raw      = cot_cit if is_cit else cot_disagg
-    df_comm      = cot_raw[cot_raw["Commodity"] == comm].sort_values("Date").reset_index(drop=True)
     rollex_daily = load_rollex(comm)
 
     with tab:
+        # ── Report type toggle (US softs only) ───────────────────────────────
+        if comm in US_COMMS:
+            report_type = st.radio("Report", ["CIT", "Disaggregated"], index=0,
+                                   horizontal=True, key=f"report_{comm}")
+            is_cit = report_type == "CIT"
+        else:
+            is_cit = False
+
+        cot_raw = cot_cit if is_cit else cot_disagg
+        df_comm = cot_raw[cot_raw["Commodity"] == comm].sort_values("Date").reset_index(drop=True)
+
         if df_comm.empty:
             st.warning(f"No COT data found for {comm}.")
             continue
+
+        # Third-leg config — switches for US softs on Disagg
+        if comm in US_COMMS and not is_cit:
+            third_label = "Other Rep."
+            long3       = "Other Long"
+            short3      = "Other Short"
+        else:
+            third_label = cfg["third_leg"]
+            long3       = cfg["long3"]
+            short3      = cfg["short3"]
 
         # ── Controls (collapsible) ────────────────────────────────────────────
         min_d         = df_comm["Date"].min().date()
         max_d         = max(df_comm["Date"].max().date(), rollex_daily["Date"].max().date())
         default_start = (df_comm["Date"].max() - pd.DateOffset(years=2)).date()
 
-        _dr       = st.session_state.get(f"sl_{comm}", (default_start, max_d))
-        third_label = cfg["third_leg"]
-        _incl_cur = st.session_state.get(f"radio_{comm}", f"Yes — Spec + Non Rep + {third_label}")
-        _dr_str   = f"{_dr[0].strftime('%d %b %Y')} → {_dr[1].strftime('%d %b %Y')}"
+        _radio_key = f"radio_{comm}_{is_cit}"
+        _dr        = st.session_state.get(f"sl_{comm}", (default_start, max_d))
+        _incl_cur  = st.session_state.get(_radio_key, f"Yes — Spec + Non Rep + {third_label}")
+        _dr_str    = f"{_dr[0].strftime('%d %b %Y')} → {_dr[1].strftime('%d %b %Y')}"
 
         with st.expander(f"Controls · {_dr_str} · {_incl_cur.split('—')[1].strip()}", expanded=False):
             ctrl1, ctrl2 = st.columns([2, 5])
@@ -141,7 +161,7 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                     f"Include {third_label} in spec legs?",
                     [f"Yes — Spec + Non Rep + {third_label}",
                      "No — Spec + Non Rep only"],
-                    index=0, horizontal=False, key=f"radio_{comm}",
+                    index=0, horizontal=False, key=_radio_key,
                 )
                 use_third = incl.startswith("Yes")
 
@@ -174,7 +194,7 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
                                       )})
                                   ))
 
-        use_third  = st.session_state.get(f"radio_{comm}", f"Yes — Spec + Non Rep + {third_label}").startswith("Yes")
+        use_third  = st.session_state.get(_radio_key, f"Yes — Spec + Non Rep + {third_label}").startswith("Yes")
         _dr        = st.session_state.get(f"sl_{comm}", (default_start, max_d))
         date_range = (_dr[0], _dr[1])
 
@@ -186,8 +206,8 @@ for tab, comm in zip(comm_tabs, COMM_CONFIG):
         spec_s = "MM Short" if not is_cit else "Spec Short"
 
         if use_third:
-            gross_long  = (df[spec_l] + df["Non Rep Long"]  + df[cfg["long3"]])  / 1000
-            gross_short = (df[spec_s] + df["Non Rep Short"] + df[cfg["short3"]]) / 1000
+            gross_long  = (df[spec_l] + df["Non Rep Long"]  + df[long3])  / 1000
+            gross_short = (df[spec_s] + df["Non Rep Short"] + df[short3]) / 1000
             leg_label   = f"Spec + Non Rep + {third_label}"
         else:
             gross_long  = (df[spec_l] + df["Non Rep Long"])  / 1000
