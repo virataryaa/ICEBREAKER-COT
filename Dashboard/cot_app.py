@@ -1728,14 +1728,14 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
 
         def _style_on(df):
             out = pd.DataFrame("", index=df.index, columns=df.columns)
-            for col in df.columns:
+            for i_col, col in enumerate(df.columns):
                 if not isinstance(col, tuple) or col[0] == "":
                     continue
                 section = col[0]
                 metric  = col[2]
                 if section == "Weekly Δ" or "Net" in metric:
-                    num = pd.to_numeric(df[col], errors="coerce")
-                    out[col] = num.apply(
+                    num = pd.to_numeric(df.iloc[:, i_col], errors="coerce")
+                    out.iloc[:, i_col] = num.apply(
                         lambda v: ("color:#16a34a" if v > 0 else "color:#dc2626" if v < 0 else "")
                         if pd.notna(v) else ""
                     )
