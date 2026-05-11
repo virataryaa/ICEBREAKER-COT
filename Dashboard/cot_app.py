@@ -1716,7 +1716,8 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
         pos_df.columns  = pd.MultiIndex.from_tuples([("Positions", g, c) for g, c in pos_df.columns])
         chg_df.columns  = pd.MultiIndex.from_tuples([("Weekly Δ",  g, c) for g, c in chg_df.columns])
         date_df.columns = pd.MultiIndex.from_tuples([("", "", "Date")])
-        date_df2        = date_df.rename(columns={("", "", "Date"): ("", "", "Date ")})  # repeat before Δ
+        date_df2        = date_df.copy()
+        date_df2.columns = pd.MultiIndex.from_tuples([("Weekly Δ", "", "Date")])
 
         combined = pd.concat([date_df, pos_df, date_df2, chg_df], axis=1).reset_index(drop=True)
 
