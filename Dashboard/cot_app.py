@@ -1711,13 +1711,14 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
         date_str = wide.index.strftime("%d %b '%y")
         date_df  = pd.DataFrame({("", "Date"): date_str}, index=wide.index)
 
-        pos_df = wide.copy()
-        chg_df = wide_chg.copy()
-        pos_df.columns = pd.MultiIndex.from_tuples([("Positions", g, c) for g, c in pos_df.columns])
-        chg_df.columns = pd.MultiIndex.from_tuples([("Weekly Δ",  g, c) for g, c in chg_df.columns])
+        pos_df  = wide.copy()
+        chg_df  = wide_chg.copy()
+        pos_df.columns  = pd.MultiIndex.from_tuples([("Positions", g, c) for g, c in pos_df.columns])
+        chg_df.columns  = pd.MultiIndex.from_tuples([("Weekly Δ",  g, c) for g, c in chg_df.columns])
         date_df.columns = pd.MultiIndex.from_tuples([("", "", "Date")])
+        date_df2        = date_df.rename(columns={("", "", "Date"): ("", "", "Date ")})  # repeat before Δ
 
-        combined = pd.concat([date_df, pos_df, chg_df], axis=1).reset_index(drop=True)
+        combined = pd.concat([date_df, pos_df, date_df2, chg_df], axis=1).reset_index(drop=True)
 
         fmt = {}
         for g in ("Old Crop", "New Crop"):
@@ -1961,8 +1962,10 @@ def main():
         rl_sidebar = load_rollex(comm)
         rl_latest  = (pd.to_datetime(rl_sidebar.index).max().strftime("%d %b %Y")
                       if rl_sidebar is not None and len(rl_sidebar) > 0 else "—")
-        cot_latest = max_d.strftime("%d %b %Y")
-        run_time   = datetime.datetime.now().strftime("%d %b %Y  %H:%M")
+        cot_latest   = max_d.strftime("%d %b %Y")
+        on_latest    = (df_on["Date"].max().strftime("%d %b %Y")
+                        if not df_on.empty else "—")
+        run_time     = datetime.datetime.now().strftime("%d %b %Y  %H:%M")
 
         def _sb_row(label, value):
             return (
@@ -1979,6 +1982,7 @@ def main():
             f"text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px'>"
             f"Data Status</p>"
             + _sb_row("Last COT", cot_latest)
+            + _sb_row("Old/New COT", on_latest)
             + _sb_row("Rollex Latest", rl_latest)
             + _sb_row("As of", run_time),
             unsafe_allow_html=True,
