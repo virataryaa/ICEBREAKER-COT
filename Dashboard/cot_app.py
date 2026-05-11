@@ -1733,17 +1733,12 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
                     continue
                 section = col[0]
                 metric  = col[2]
-                for i in df.index:
-                    raw = df.at[i, col]
-                    try:
-                        v = float(raw)
-                        if np.isnan(v):
-                            continue
-                    except (TypeError, ValueError):
-                        continue
-                    clr = "#16a34a" if v > 0 else "#dc2626" if v < 0 else "#888"
-                    if section == "Weekly Δ" or "Net" in metric:
-                        out.at[i, col] = f"color:{clr}"
+                if section == "Weekly Δ" or "Net" in metric:
+                    num = pd.to_numeric(df[col], errors="coerce")
+                    out[col] = num.apply(
+                        lambda v: ("color:#16a34a" if v > 0 else "color:#dc2626" if v < 0 else "")
+                        if pd.notna(v) else ""
+                    )
             return out
 
         styled = (combined.style
