@@ -1726,32 +1726,28 @@ def render_oldnew(df_on: pd.DataFrame, comm: str, df_on_full: pd.DataFrame = Non
                 fmt[("Positions", g, c)] = "{:.1f}"
                 fmt[("Weekly Δ",  g, c)] = "{:+.1f}"
 
-        def _style_on(df):
-            out = pd.DataFrame("", index=df.index, columns=df.columns)
-            for i_col, col in enumerate(df.columns):
-                if not isinstance(col, tuple) or col[0] == "":
-                    continue
-                section = col[0]
-                metric  = col[2]
-                if section == "Weekly Δ" or "Net" in metric:
-                    num = pd.to_numeric(df.iloc[:, i_col], errors="coerce")
-                    out.iloc[:, i_col] = num.apply(
-                        lambda v: ("color:#16a34a" if v > 0 else "color:#dc2626" if v < 0 else "")
-                        if pd.notna(v) else ""
-                    )
-            return out
+        def _cell_color(v):
+            try:
+                fv = float(v)
+                if np.isnan(fv): return ""
+                return "color:#16a34a" if fv > 0 else "color:#dc2626" if fv < 0 else ""
+            except (TypeError, ValueError):
+                return ""
 
-        styled = (combined.style
-                          .format(fmt, na_rep="—")
-                          .apply(_style_on, axis=None)
-                          .hide(axis="index")
-                          .set_table_styles([
-                              {"selector": "thead tr th",
-                               "props": [("text-align", "center"),
-                                         ("font-weight", "600"),
-                                         ("font-size", "0.75rem"),
-                                         ("color", "#444")]},
-                          ]))
+        color_cols = [col for col in combined.columns
+                      if isinstance(col, tuple) and col[0] != ""
+                      and (col[0] == "Weekly Δ" or "Net" in col[2])]
+
+        styled = combined.style.format(fmt, na_rep="—").hide(axis="index")
+        if color_cols:
+            styled = styled.map(_cell_color, subset=color_cols)
+        styled = styled.set_table_styles([
+            {"selector": "thead tr th",
+             "props": [("text-align", "center"),
+                       ("font-weight", "600"),
+                       ("font-size", "0.75rem"),
+                       ("color", "#444")]},
+        ])
         st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
 
     # ── OI split ──────────────────────────────────────────────────────────────
