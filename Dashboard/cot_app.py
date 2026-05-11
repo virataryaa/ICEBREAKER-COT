@@ -1943,12 +1943,17 @@ def main():
 
         st.markdown("---")
 
-        date_range = st.slider(
-            "Date range",
-            min_value=min_d, max_value=max_d,
-            value=(def_start, max_d),
-            format="MMM YYYY",
+        st.markdown(
+            f"<p style='font-size:.62rem;font-weight:700;color:{GRAY};"
+            f"text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px'>"
+            f"Date Range</p>",
+            unsafe_allow_html=True,
         )
+        d_from = st.date_input("From", value=def_start, min_value=min_d, max_value=max_d,
+                               label_visibility="visible")
+        d_to   = st.date_input("To",   value=max_d,     min_value=min_d, max_value=max_d,
+                               label_visibility="visible")
+        date_range = (d_from, d_to)
 
         st.markdown("---")
 
